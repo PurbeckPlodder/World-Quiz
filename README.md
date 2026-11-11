@@ -2,6 +2,8 @@
 
 A responsive country-identification quiz built with React, TypeScript, Vite, and D3. Country borders are provided by Natural Earth at 1:50m resolution.
 
+Quiz clues include country name, flag, capital, and a single-country outline. In Outline mode, choose the country from the on-screen options.
+
 ## Run locally
 
 ```sh

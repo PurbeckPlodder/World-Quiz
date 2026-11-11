@@ -15,7 +15,7 @@ type CountryProperties = {
 
 type Country = Feature<Geometry, CountryProperties>;
 type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
-type QuizMode = 'name' | 'flag' | 'capital';
+type QuizMode = 'name' | 'flag' | 'capital' | 'outline';
 type Continent = 'World' | 'Africa' | 'Asia' | 'Europe' | 'North America' | 'South America' | 'Oceania' | 'Antarctica';
 
 const continents: Continent[] = ['World', 'Africa', 'Asia', 'Europe', 'North America', 'South America', 'Oceania', 'Antarctica'];
@@ -24,6 +24,24 @@ const countriesUrl = 'https://raw.githubusercontent.com/nvkelso/natural-earth-ve
 function randomCountry(features: Country[], exclude?: string) {
   const choices = features.filter((feature) => feature.properties.ADMIN !== exclude);
   return choices[Math.floor(Math.random() * choices.length)] ?? features[0];
+}
+
+function outlineChoices(features: Country[], target: string) {
+  const answer = features.find((country) => country.properties.ADMIN === target);
+  if (!answer) return [];
+
+  const choices = features.filter((country) => country.properties.ADMIN !== target);
+  for (let index = choices.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [choices[index], choices[swapIndex]] = [choices[swapIndex], choices[index]];
+  }
+
+  const options = [answer, ...choices.slice(0, 3)];
+  for (let index = options.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [options[index], options[swapIndex]] = [options[swapIndex], options[index]];
+  }
+  return options;
 }
 
 function metadataFor(country: Country, metadata: Map<string, CountryMetadata>) {
@@ -55,7 +73,7 @@ function App() {
   );
   const metadataByCode = useMemo(() => new Map(countryMetadata.map((country) => [country.cca3, country])), [countryMetadata]);
   const quizCountries = useMemo(() => {
-    if (quizMode === 'name') return activeCountries;
+    if (quizMode === 'name' || quizMode === 'outline') return activeCountries;
     return activeCountries.filter((country) => {
       const metadata = metadataFor(country, metadataByCode);
       return quizMode === 'flag'
@@ -135,6 +153,7 @@ function App() {
   const accuracy = total ? Math.round((score / total) * 100) : 0;
   const targetCountry = quizCountries.find((country) => country.properties.ADMIN === target);
   const targetMetadata = targetCountry ? metadataFor(targetCountry, metadataByCode) : undefined;
+  const choices = useMemo(() => quizMode === 'outline' ? outlineChoices(quizCountries, target) : [], [quizCountries, quizMode, target]);
 
   return (
     <main className="app-shell">
@@ -149,27 +168,40 @@ function App() {
       </header>
 
       <div className="workspace">
-        <aside className="quiz-panel">
+        <aside className={`quiz-panel${quizMode === 'outline' ? ' outline-quiz-panel' : ''}`}>
           <div className="eyebrow"><span>01</span> &nbsp;COUNTRY STUDY</div>
           <div className="question-block" aria-live="polite">
             <div className="question-label">YOUR NEXT DESTINATION</div>
-            <h1>{loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : target ? quizMode === 'name' ? <>Find <em>{target}</em></> : quizMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : 'Identify this flag' : 'No countries found'}</h1>
+            <h1>{loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : target ? quizMode === 'name' ? <>Find <em>{target}</em></> : quizMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : quizMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
             {quizMode === 'flag' && targetMetadata?.cca2 && <img className="flag-clue" src={`https://flagcdn.com/w320/${targetMetadata.cca2.toLowerCase()}.png`} alt="Flag clue" />}
-            <p className="instruction">{loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && quizMode !== 'name' ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && quizMode !== 'name' ? `No ${quizMode} clues are available for this region.` : ''}</p>
+            <p className="instruction">{loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (quizMode === 'flag' || quizMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && quizMode !== 'name' ? `No ${quizMode} clues are available for this region.` : ''}</p>
           </div>
 
           <section className="quiz-settings" aria-label="Quiz options">
             <div className="section-heading"><span>CLUE TYPE</span></div>
             <div className="mode-options" role="group" aria-label="Choose a quiz clue">
-              {(['name', 'flag', 'capital'] as const).map((mode) => (
-                <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => setQuizMode(mode)} aria-pressed={quizMode === mode} disabled={mode !== 'name' && (metadataLoading || metadataError)}>
-                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : 'Capital'}
+              {(['name', 'flag', 'capital', 'outline'] as const).map((mode) => (
+                <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => setQuizMode(mode)} aria-pressed={quizMode === mode} disabled={(mode === 'flag' || mode === 'capital') && (metadataLoading || metadataError)}>
+                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : 'Outline'}
                 </button>
               ))}
             </div>
             <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />Show country name on hover</label>
             {metadataError && <p className="metadata-note">Flag and capital clues are unavailable right now.</p>}
           </section>
+
+          {quizMode === 'outline' && target && (
+            <section className="outline-choices" aria-label="Choose the outlined country">
+              <div className="section-heading"><span>WHICH COUNTRY?</span><span className="region-count">{choices.length} {choices.length === 1 ? 'OPTION' : 'OPTIONS'}</span></div>
+              <div className="outline-choice-grid">
+                {choices.map((country, index) => {
+                  const name = country.properties.ADMIN;
+                  const result = picked === name ? (isCorrect ? ' correct' : ' wrong') : locked && name === target ? ' answer' : '';
+                  return <button key={`${name}-${index}`} className={`outline-choice${result}`} onClick={() => answer(country)} disabled={locked}>{name}</button>;
+                })}
+              </div>
+            </section>
+          )}
 
           <section className="region-section" aria-labelledby="region-title">
             <div className="section-heading"><span id="region-title">REGION</span><span className="region-count">{String(continents.indexOf(continent) + 1).padStart(2, '0')} / 08</span></div>
@@ -192,23 +224,64 @@ function App() {
         </aside>
 
         <section className="map-section" aria-label="Interactive world map">
-          <div className="map-heading"><div><span className="map-kicker">THE WORLD, ONE COUNTRY AT A TIME</span><span className="map-title">{continent === 'World' ? 'World map' : continent}</span></div><div className="map-coordinates">50° N&nbsp; / &nbsp;20° E</div></div>
-          <MapView
-            countries={activeCountries}
-            continent={continent}
-            target={target}
-            picked={picked}
-            locked={locked}
-            loading={loading}
-            loadError={loadError}
-            answerableNames={answerableNames}
-            showHoverName={showHoverName}
-            onPick={answer}
-          />
-          <div className="map-caption"><span><i className="legend-dot" />COUNTRY BORDERS</span><span>NATURAL EARTH / 1:50M</span></div>
+          <div className="map-heading"><div><span className="map-kicker">{quizMode === 'outline' ? 'ONE COUNTRY, NO NEIGHBOURS' : 'THE WORLD, ONE COUNTRY AT A TIME'}</span><span className="map-title">{quizMode === 'outline' ? 'Country outline' : continent === 'World' ? 'World map' : continent}</span></div><div className="map-coordinates">{quizMode === 'outline' ? 'IDENTIFY THE SHAPE' : '50° N&nbsp; / &nbsp;20° E'}</div></div>
+          {quizMode === 'outline' ? (
+            <CountryOutline country={targetCountry} loading={loading} loadError={loadError} />
+          ) : (
+            <MapView
+              countries={activeCountries}
+              continent={continent}
+              target={target}
+              picked={picked}
+              locked={locked}
+              loading={loading}
+              loadError={loadError}
+              answerableNames={answerableNames}
+              showHoverName={showHoverName}
+              onPick={answer}
+            />
+          )}
+          <div className="map-caption"><span><i className="legend-dot" />{quizMode === 'outline' ? 'TARGET COUNTRY ONLY' : 'COUNTRY BORDERS'}</span><span>NATURAL EARTH / 1:50M</span></div>
         </section>
       </div>
     </main>
+  );
+}
+
+type CountryOutlineProps = {
+  country?: Country;
+  loading: boolean;
+  loadError: boolean;
+};
+
+function CountryOutline({ country, loading, loadError }: CountryOutlineProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(([entry]) => setSize({ width: entry.contentRect.width, height: entry.contentRect.height }));
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  const outlinePath = useMemo(() => {
+    if (!country || !size.width || !size.height) return undefined;
+    const projection = geoNaturalEarth1().fitExtent([[size.width * 0.12, size.height * 0.12], [size.width * 0.88, size.height * 0.88]], country);
+    return geoPath(projection)(country) ?? undefined;
+  }, [country, size]);
+
+  return (
+    <div className="map-canvas outline-canvas" ref={containerRef}>
+      <svg className="world-map" aria-label="Outline of a country">
+        {outlinePath && <path className="outline-shape" d={outlinePath} />}
+      </svg>
+      {(loading || loadError) && <div className="map-message">{loadError ? 'Could not load country outlines' : 'Drawing the outline…'}</div>}
+      {!loading && !loadError && !country && <div className="map-message">No country outline available</div>}
+      {!loading && !loadError && country && !outlinePath && <div className="map-message">Drawing the outline…</div>}
+      <div className="map-stamp">ATLAS<br /><span>ONE COUNTRY</span></div>
+    </div>
   );
 }
 
