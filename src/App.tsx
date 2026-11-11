@@ -15,11 +15,23 @@ type CountryProperties = {
 
 type Country = Feature<Geometry, CountryProperties>;
 type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
-type QuizMode = 'name' | 'flag' | 'capital' | 'outline';
+type QuestionMode = 'name' | 'flag' | 'capital' | 'outline';
+type QuizMode = QuestionMode | 'twenty';
+type SessionQuestion = { mode: QuestionMode; continent: Continent; target: string };
 type Continent = 'World' | 'Africa' | 'Asia' | 'Europe' | 'North America' | 'South America' | 'Oceania' | 'Antarctica';
 
 const continents: Continent[] = ['World', 'Africa', 'Asia', 'Europe', 'North America', 'South America', 'Oceania', 'Antarctica'];
+const challengeContinents: Continent[] = ['Africa', 'Asia', 'Europe', 'South America', 'North America'];
 const countriesUrl = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson';
+
+function shuffle<T>(items: T[]) {
+  const shuffledItems = [...items];
+  for (let index = shuffledItems.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffledItems[index], shuffledItems[swapIndex]] = [shuffledItems[swapIndex], shuffledItems[index]];
+  }
+  return shuffledItems;
+}
 
 function randomCountry(features: Country[], exclude?: string) {
   const choices = features.filter((feature) => feature.properties.ADMIN !== exclude);
@@ -36,18 +48,35 @@ function outlineChoices(features: Country[], target: string) {
     [choices[index], choices[swapIndex]] = [choices[swapIndex], choices[index]];
   }
 
-  const options = [answer, ...choices.slice(0, 3)];
-  for (let index = options.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [options[index], options[swapIndex]] = [options[swapIndex], options[index]];
-  }
-  return options;
+  return shuffle([answer, ...choices.slice(0, 7)]);
 }
 
 function metadataFor(country: Country, metadata: Map<string, CountryMetadata>) {
   const { ISO_A3_EH, ISO_A3, ADM0_A3 } = country.properties;
   const code = [ISO_A3_EH, ISO_A3, ADM0_A3].find((value) => value && value !== '-99');
   return code ? metadata.get(code) : undefined;
+}
+
+function buildTwentyQuestions(countries: Country[], metadata: Map<string, CountryMetadata>): SessionQuestion[] {
+  const modes = shuffle<QuestionMode>(['name', 'flag', 'capital', 'outline']);
+  const regions = shuffle(challengeContinents).slice(0, modes.length);
+  const questions: SessionQuestion[] = [];
+
+  modes.forEach((mode, blockIndex) => {
+    const region = regions[blockIndex];
+    const eligibleCountries = countries.filter((country) => {
+      if (country.properties.CONTINENT !== region) return false;
+      if (mode === 'name' || mode === 'outline') return true;
+      const countryMetadata = metadataFor(country, metadata);
+      return mode === 'flag' ? Boolean(countryMetadata?.cca2) : Boolean(countryMetadata?.capital?.[0]);
+    });
+
+    shuffle(eligibleCountries).slice(0, 5).forEach((country) => {
+      questions.push({ mode, continent: region, target: country.properties.ADMIN });
+    });
+  });
+
+  return questions.length === 20 ? questions : [];
 }
 
 function App() {
@@ -60,27 +89,35 @@ function App() {
   const [continent, setContinent] = useState<Continent>('World');
   const [quizMode, setQuizMode] = useState<QuizMode>('name');
   const [showHoverName, setShowHoverName] = useState(true);
+  const [sessionQuestions, setSessionQuestions] = useState<SessionQuestion[]>([]);
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(60);
+  const [challengeFinished, setChallengeFinished] = useState(false);
   const [target, setTarget] = useState('');
   const [picked, setPicked] = useState('');
   const [locked, setLocked] = useState(false);
   const [score, setScore] = useState(0);
   const [total, setTotal] = useState(0);
   const timer = useRef<number | undefined>(undefined);
+  const countdown = useRef<number | undefined>(undefined);
 
+  const currentQuestion = quizMode === 'twenty' ? sessionQuestions[questionIndex] : undefined;
+  const questionMode: QuestionMode = currentQuestion?.mode ?? (quizMode === 'twenty' ? 'name' : quizMode);
+  const activeContinent = currentQuestion?.continent ?? continent;
   const activeCountries = useMemo(
-    () => continent === 'World' ? countries : countries.filter((country) => country.properties.CONTINENT === continent),
-    [countries, continent],
+    () => activeContinent === 'World' ? countries : countries.filter((country) => country.properties.CONTINENT === activeContinent),
+    [countries, activeContinent],
   );
   const metadataByCode = useMemo(() => new Map(countryMetadata.map((country) => [country.cca3, country])), [countryMetadata]);
   const quizCountries = useMemo(() => {
-    if (quizMode === 'name' || quizMode === 'outline') return activeCountries;
+    if (questionMode === 'name' || questionMode === 'outline') return activeCountries;
     return activeCountries.filter((country) => {
       const metadata = metadataFor(country, metadataByCode);
-      return quizMode === 'flag'
+      return questionMode === 'flag'
         ? Boolean(metadata?.cca2)
         : Boolean(metadata?.capital?.[0]);
     });
-  }, [activeCountries, metadataByCode, quizMode]);
+  }, [activeCountries, metadataByCode, questionMode]);
   const answerableNames = useMemo(() => new Set(quizCountries.map((country) => country.properties.ADMIN)), [quizCountries]);
 
   useEffect(() => {
@@ -118,15 +155,29 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (quizMode === 'twenty') return;
     window.clearTimeout(timer.current);
     setLocked(false);
     setPicked('');
     setTarget(quizCountries.length ? randomCountry(quizCountries)?.properties.ADMIN ?? '' : '');
     return () => window.clearTimeout(timer.current);
-  }, [quizCountries]);
+  }, [quizCountries, quizMode]);
+
+  useEffect(() => {
+    if (quizMode !== 'twenty' || challengeFinished) return;
+    countdown.current = window.setInterval(() => setTimeRemaining((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearInterval(countdown.current);
+  }, [quizMode, challengeFinished]);
+
+  useEffect(() => {
+    if (quizMode !== 'twenty' || timeRemaining > 0 || challengeFinished) return;
+    window.clearTimeout(timer.current);
+    setLocked(true);
+    setChallengeFinished(true);
+  }, [challengeFinished, quizMode, timeRemaining]);
 
   function answer(country: Country) {
-    if (locked || !target) return;
+    if (locked || challengeFinished || !target) return;
     const answerName = country.properties.ADMIN;
     setPicked(answerName);
     setLocked(true);
@@ -134,13 +185,59 @@ function App() {
     if (answerName === target) setScore((value) => value + 1);
 
     timer.current = window.setTimeout(() => {
-      setTarget(randomCountry(quizCountries, target)?.properties.ADMIN ?? '');
+      if (quizMode === 'twenty') {
+        const nextIndex = questionIndex + 1;
+        if (nextIndex === sessionQuestions.length) {
+          setChallengeFinished(true);
+          setLocked(true);
+          return;
+        }
+        setQuestionIndex(nextIndex);
+        setTarget(sessionQuestions[nextIndex].target);
+      } else {
+        setTarget(randomCountry(quizCountries, target)?.properties.ADMIN ?? '');
+      }
       setPicked('');
       setLocked(false);
     }, 1000);
   }
 
+  function startTwentyQuestions() {
+    const questions = buildTwentyQuestions(countries, metadataByCode);
+    if (questions.length !== 20) return;
+    window.clearTimeout(timer.current);
+    setSessionQuestions(questions);
+    setQuestionIndex(0);
+    setTimeRemaining(60);
+    setChallengeFinished(false);
+    setQuizMode('twenty');
+    setTarget(questions[0].target);
+    setPicked('');
+    setLocked(false);
+    setScore(0);
+    setTotal(0);
+  }
+
+  function changeMode(mode: QuizMode) {
+    if (mode === 'twenty') {
+      startTwentyQuestions();
+      return;
+    }
+    window.clearTimeout(timer.current);
+    setChallengeFinished(false);
+    setSessionQuestions([]);
+    setQuestionIndex(0);
+    setTimeRemaining(60);
+    setPicked('');
+    setLocked(false);
+    setQuizMode(mode);
+  }
+
   function resetScore() {
+    if (quizMode === 'twenty') {
+      startTwentyQuestions();
+      return;
+    }
     setScore(0);
     setTotal(0);
     setPicked('');
@@ -153,7 +250,7 @@ function App() {
   const accuracy = total ? Math.round((score / total) * 100) : 0;
   const targetCountry = quizCountries.find((country) => country.properties.ADMIN === target);
   const targetMetadata = targetCountry ? metadataFor(targetCountry, metadataByCode) : undefined;
-  const choices = useMemo(() => quizMode === 'outline' ? outlineChoices(quizCountries, target) : [], [quizCountries, quizMode, target]);
+  const choices = useMemo(() => questionMode === 'outline' ? outlineChoices(quizCountries, target) : [], [quizCountries, questionMode, target]);
 
   return (
     <main className="app-shell">
@@ -168,21 +265,24 @@ function App() {
       </header>
 
       <div className="workspace">
-        <aside className={`quiz-panel${quizMode === 'outline' ? ' outline-quiz-panel' : ''}`}>
+        <aside className={`quiz-panel${questionMode === 'outline' ? ' outline-quiz-panel' : ''}${quizMode === 'twenty' ? ' challenge-quiz-panel' : ''}`}>
           <div className="eyebrow"><span>01</span> &nbsp;COUNTRY STUDY</div>
           <div className="question-block" aria-live="polite">
-            <div className="question-label">YOUR NEXT DESTINATION</div>
-            <h1>{loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : target ? quizMode === 'name' ? <>Find <em>{target}</em></> : quizMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : quizMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
-            {quizMode === 'flag' && targetMetadata?.cca2 && <img className="flag-clue" src={`https://flagcdn.com/w320/${targetMetadata.cca2.toLowerCase()}.png`} alt="Flag clue" />}
-            <p className="instruction">{loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (quizMode === 'flag' || quizMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && quizMode !== 'name' ? `No ${quizMode} clues are available for this region.` : ''}</p>
+            <div className="question-label">
+              {quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`00:${String(timeRemaining).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
+            </div>
+            {quizMode === 'twenty' && <div className="challenge-progress">QUESTION {Math.min(questionIndex + 1, 20)} / 20 <span>{activeContinent.toUpperCase()}</span></div>}
+            <h1>{loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
+            {questionMode === 'flag' && targetMetadata?.cca2 && <img className="flag-clue" src={`https://flagcdn.com/w320/${targetMetadata.cca2.toLowerCase()}.png`} alt="Flag clue" />}
+            <p className="instruction">{quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
           </div>
 
           <section className="quiz-settings" aria-label="Quiz options">
             <div className="section-heading"><span>CLUE TYPE</span></div>
             <div className="mode-options" role="group" aria-label="Choose a quiz clue">
-              {(['name', 'flag', 'capital', 'outline'] as const).map((mode) => (
-                <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => setQuizMode(mode)} aria-pressed={quizMode === mode} disabled={(mode === 'flag' || mode === 'capital') && (metadataLoading || metadataError)}>
-                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : 'Outline'}
+              {(['name', 'flag', 'capital', 'outline', 'twenty'] as const).map((mode) => (
+                <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => changeMode(mode)} aria-pressed={quizMode === mode} disabled={((mode === 'flag' || mode === 'capital') && (metadataLoading || metadataError)) || (mode === 'twenty' && (loading || metadataLoading || metadataError))}>
+                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : '20 Questions'}
                 </button>
               ))}
             </div>
@@ -190,24 +290,24 @@ function App() {
             {metadataError && <p className="metadata-note">Flag and capital clues are unavailable right now.</p>}
           </section>
 
-          {quizMode === 'outline' && target && (
+          {questionMode === 'outline' && target && (
             <section className="outline-choices" aria-label="Choose the outlined country">
               <div className="section-heading"><span>WHICH COUNTRY?</span><span className="region-count">{choices.length} {choices.length === 1 ? 'OPTION' : 'OPTIONS'}</span></div>
               <div className="outline-choice-grid">
                 {choices.map((country, index) => {
                   const name = country.properties.ADMIN;
                   const result = picked === name ? (isCorrect ? ' correct' : ' wrong') : locked && name === target ? ' answer' : '';
-                  return <button key={`${name}-${index}`} className={`outline-choice${result}`} onClick={() => answer(country)} disabled={locked}>{name}</button>;
+                  return <button key={`${name}-${index}`} className={`outline-choice${result}`} onClick={() => answer(country)} disabled={locked || challengeFinished}>{name}</button>;
                 })}
               </div>
             </section>
           )}
 
           <section className="region-section" aria-labelledby="region-title">
-            <div className="section-heading"><span id="region-title">REGION</span><span className="region-count">{String(continents.indexOf(continent) + 1).padStart(2, '0')} / 08</span></div>
+            <div className="section-heading"><span id="region-title">{quizMode === 'twenty' ? 'REGION · AUTO' : 'REGION'}</span><span className="region-count">{String(continents.indexOf(activeContinent) + 1).padStart(2, '0')} / 08</span></div>
             <div className="region-grid" role="group" aria-label="Choose a region">
               {continents.map((region) => (
-                <button key={region} className={`region-option${region === continent ? ' selected' : ''}`} onClick={() => setContinent(region)} aria-pressed={region === continent}>
+                <button key={region} className={`region-option${region === activeContinent ? ' selected' : ''}`} onClick={() => setContinent(region)} aria-pressed={region === activeContinent} disabled={quizMode === 'twenty'}>
                   <span>{region}</span><span className="region-arrow">↗</span>
                 </button>
               ))}
@@ -224,13 +324,13 @@ function App() {
         </aside>
 
         <section className="map-section" aria-label="Interactive world map">
-          <div className="map-heading"><div><span className="map-kicker">{quizMode === 'outline' ? 'ONE COUNTRY, NO NEIGHBOURS' : 'THE WORLD, ONE COUNTRY AT A TIME'}</span><span className="map-title">{quizMode === 'outline' ? 'Country outline' : continent === 'World' ? 'World map' : continent}</span></div><div className="map-coordinates">{quizMode === 'outline' ? 'IDENTIFY THE SHAPE' : '50° N&nbsp; / &nbsp;20° E'}</div></div>
-          {quizMode === 'outline' ? (
+          <div className="map-heading"><div><span className="map-kicker">{questionMode === 'outline' ? 'ONE COUNTRY, NO NEIGHBOURS' : 'THE WORLD, ONE COUNTRY AT A TIME'}</span><span className="map-title">{questionMode === 'outline' ? 'Country outline' : activeContinent === 'World' ? 'World map' : activeContinent}</span></div><div className="map-coordinates">{questionMode === 'outline' ? 'IDENTIFY THE SHAPE' : quizMode === 'twenty' ? '60 SECOND ROUND' : '50° N&nbsp; / &nbsp;20° E'}</div></div>
+          {questionMode === 'outline' ? (
             <CountryOutline country={targetCountry} loading={loading} loadError={loadError} />
           ) : (
             <MapView
               countries={activeCountries}
-              continent={continent}
+              continent={activeContinent}
               target={target}
               picked={picked}
               locked={locked}
@@ -241,7 +341,7 @@ function App() {
               onPick={answer}
             />
           )}
-          <div className="map-caption"><span><i className="legend-dot" />{quizMode === 'outline' ? 'TARGET COUNTRY ONLY' : 'COUNTRY BORDERS'}</span><span>NATURAL EARTH / 1:50M</span></div>
+          <div className="map-caption"><span><i className="legend-dot" />{questionMode === 'outline' ? 'TARGET COUNTRY ONLY' : 'COUNTRY BORDERS'}</span><span>NATURAL EARTH / 1:50M</span></div>
         </section>
       </div>
     </main>
