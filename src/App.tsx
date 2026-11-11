@@ -8,9 +8,14 @@ import type { Feature, FeatureCollection, Geometry } from 'geojson';
 type CountryProperties = {
   ADMIN: string;
   CONTINENT: string;
+  ISO_A3_EH?: string;
+  ISO_A3?: string;
+  ADM0_A3?: string;
 };
 
 type Country = Feature<Geometry, CountryProperties>;
+type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
+type QuizMode = 'name' | 'flag' | 'capital';
 type Continent = 'World' | 'Africa' | 'Asia' | 'Europe' | 'North America' | 'South America' | 'Oceania' | 'Antarctica';
 
 const continents: Continent[] = ['World', 'Africa', 'Asia', 'Europe', 'North America', 'South America', 'Oceania', 'Antarctica'];
@@ -21,11 +26,22 @@ function randomCountry(features: Country[], exclude?: string) {
   return choices[Math.floor(Math.random() * choices.length)] ?? features[0];
 }
 
+function metadataFor(country: Country, metadata: Map<string, CountryMetadata>) {
+  const { ISO_A3_EH, ISO_A3, ADM0_A3 } = country.properties;
+  const code = [ISO_A3_EH, ISO_A3, ADM0_A3].find((value) => value && value !== '-99');
+  return code ? metadata.get(code) : undefined;
+}
+
 function App() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [countryMetadata, setCountryMetadata] = useState<CountryMetadata[]>([]);
+  const [metadataLoading, setMetadataLoading] = useState(true);
+  const [metadataError, setMetadataError] = useState(false);
   const [continent, setContinent] = useState<Continent>('World');
+  const [quizMode, setQuizMode] = useState<QuizMode>('name');
+  const [showHoverName, setShowHoverName] = useState(true);
   const [target, setTarget] = useState('');
   const [picked, setPicked] = useState('');
   const [locked, setLocked] = useState(false);
@@ -37,6 +53,17 @@ function App() {
     () => continent === 'World' ? countries : countries.filter((country) => country.properties.CONTINENT === continent),
     [countries, continent],
   );
+  const metadataByCode = useMemo(() => new Map(countryMetadata.map((country) => [country.cca3, country])), [countryMetadata]);
+  const quizCountries = useMemo(() => {
+    if (quizMode === 'name') return activeCountries;
+    return activeCountries.filter((country) => {
+      const metadata = metadataFor(country, metadataByCode);
+      return quizMode === 'flag'
+        ? Boolean(metadata?.cca2)
+        : Boolean(metadata?.capital?.[0]);
+    });
+  }, [activeCountries, metadataByCode, quizMode]);
+  const answerableNames = useMemo(() => new Set(quizCountries.map((country) => country.properties.ADMIN)), [quizCountries]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -56,12 +83,29 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    fetch('https://raw.githubusercontent.com/mledoze/countries/master/countries.json', { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error('Country clue data request failed');
+        return response.json() as Promise<CountryMetadata[]>;
+      })
+      .then((metadata) => setCountryMetadata(metadata.filter((country) => Boolean(country.cca2 && country.cca3))))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setMetadataError(true);
+      })
+      .finally(() => setMetadataLoading(false));
+
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
     window.clearTimeout(timer.current);
     setLocked(false);
     setPicked('');
-    setTarget(activeCountries.length ? randomCountry(activeCountries)?.properties.ADMIN ?? '' : '');
+    setTarget(quizCountries.length ? randomCountry(quizCountries)?.properties.ADMIN ?? '' : '');
     return () => window.clearTimeout(timer.current);
-  }, [activeCountries]);
+  }, [quizCountries]);
 
   function answer(country: Country) {
     if (locked || !target) return;
@@ -72,7 +116,7 @@ function App() {
     if (answerName === target) setScore((value) => value + 1);
 
     timer.current = window.setTimeout(() => {
-      setTarget(randomCountry(activeCountries, target)?.properties.ADMIN ?? '');
+      setTarget(randomCountry(quizCountries, target)?.properties.ADMIN ?? '');
       setPicked('');
       setLocked(false);
     }, 1000);
@@ -84,11 +128,13 @@ function App() {
     setPicked('');
     setLocked(false);
     window.clearTimeout(timer.current);
-    setTarget(randomCountry(activeCountries)?.properties.ADMIN ?? '');
+    setTarget(randomCountry(quizCountries)?.properties.ADMIN ?? '');
   }
 
   const isCorrect = picked === target && Boolean(picked);
   const accuracy = total ? Math.round((score / total) * 100) : 0;
+  const targetCountry = quizCountries.find((country) => country.properties.ADMIN === target);
+  const targetMetadata = targetCountry ? metadataFor(targetCountry, metadataByCode) : undefined;
 
   return (
     <main className="app-shell">
@@ -107,9 +153,23 @@ function App() {
           <div className="eyebrow"><span>01</span> &nbsp;COUNTRY STUDY</div>
           <div className="question-block" aria-live="polite">
             <div className="question-label">YOUR NEXT DESTINATION</div>
-            <h1>{loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : target ? <>Find <em>{target}</em></> : 'No countries found'}</h1>
-            <p className="instruction">{loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : ''}</p>
+            <h1>{loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : target ? quizMode === 'name' ? <>Find <em>{target}</em></> : quizMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : 'Identify this flag' : 'No countries found'}</h1>
+            {quizMode === 'flag' && targetMetadata?.cca2 && <img className="flag-clue" src={`https://flagcdn.com/w320/${targetMetadata.cca2.toLowerCase()}.png`} alt="Flag clue" />}
+            <p className="instruction">{loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && quizMode !== 'name' ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && quizMode !== 'name' ? `No ${quizMode} clues are available for this region.` : ''}</p>
           </div>
+
+          <section className="quiz-settings" aria-label="Quiz options">
+            <div className="section-heading"><span>CLUE TYPE</span></div>
+            <div className="mode-options" role="group" aria-label="Choose a quiz clue">
+              {(['name', 'flag', 'capital'] as const).map((mode) => (
+                <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => setQuizMode(mode)} aria-pressed={quizMode === mode} disabled={mode !== 'name' && (metadataLoading || metadataError)}>
+                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : 'Capital'}
+                </button>
+              ))}
+            </div>
+            <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />Show country name on hover</label>
+            {metadataError && <p className="metadata-note">Flag and capital clues are unavailable right now.</p>}
+          </section>
 
           <section className="region-section" aria-labelledby="region-title">
             <div className="section-heading"><span id="region-title">REGION</span><span className="region-count">{String(continents.indexOf(continent) + 1).padStart(2, '0')} / 08</span></div>
@@ -141,6 +201,8 @@ function App() {
             locked={locked}
             loading={loading}
             loadError={loadError}
+            answerableNames={answerableNames}
+            showHoverName={showHoverName}
             onPick={answer}
           />
           <div className="map-caption"><span><i className="legend-dot" />COUNTRY BORDERS</span><span>NATURAL EARTH / 1:50M</span></div>
@@ -158,15 +220,22 @@ type MapViewProps = {
   locked: boolean;
   loading: boolean;
   loadError: boolean;
+  answerableNames: Set<string>;
+  showHoverName: boolean;
   onPick: (country: Country) => void;
 };
 
-function MapView({ countries, continent, target, picked, locked, loading, loadError, onPick }: MapViewProps) {
+function MapView({ countries, continent, target, picked, locked, loading, loadError, answerableNames, showHoverName, onPick }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const groupRef = useRef<SVGGElement>(null);
   const behaviorRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [hoveredName, setHoveredName] = useState('');
+
+  useEffect(() => {
+    if (!showHoverName) setHoveredName('');
+  }, [showHoverName]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -221,22 +290,30 @@ function MapView({ countries, continent, target, picked, locked, loading, loadEr
           {graticulePath && <path className="graticule" d={graticulePath} />}
           {path && countries.map((country, index) => {
             const name = country.properties.ADMIN;
+            const answerable = answerableNames.has(name);
             const status = picked === name ? (picked === target ? 'correct' : 'wrong') : locked && target === name ? 'answer' : '';
             return (
               <path
                 key={`${name}-${index}`}
                 d={path(country) ?? undefined}
-                className={`country-shape${status ? ` ${status}` : ''}${locked ? ' locked' : ''}`}
+                className={`country-shape${status ? ` ${status}` : ''}${locked || !answerable ? ' locked' : ''}${!answerable ? ' unavailable' : ''}`}
                 role="button"
-                tabIndex={locked ? -1 : 0}
+                tabIndex={locked || !answerable ? -1 : 0}
                 aria-label={name}
-                onClick={() => onPick(country)}
-                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onPick(country); } }}
-              ><title>{name}</title></path>
+                aria-disabled={locked || !answerable}
+                onMouseEnter={() => { if (showHoverName) setHoveredName(name); }}
+                onMouseLeave={() => setHoveredName('')}
+                onFocus={() => { if (showHoverName) setHoveredName(name); }}
+                onBlur={() => setHoveredName('')}
+                onClick={() => { if (answerable) onPick(country); }}
+                onKeyDown={(event) => { if (answerable && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onPick(country); } }}
+              />
             );
           })}
         </g>
       </svg>
+
+      {showHoverName && hoveredName && <div className="country-hover-label" role="status">{hoveredName}</div>}
 
       {(loading || loadError) && <div className="map-message">{loadError ? 'Could not load map data' : 'Drawing the world…'}</div>}
       {!loading && !loadError && countries.length === 0 && <div className="map-message">No countries in this region</div>}
