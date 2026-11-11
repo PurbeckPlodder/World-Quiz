@@ -108,7 +108,7 @@ function App() {
           <div className="question-block" aria-live="polite">
             <div className="question-label">YOUR NEXT DESTINATION</div>
             <h1>{loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : target ? <>Find <em>{target}</em></> : 'No countries found'}</h1>
-            <p className="instruction">{loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : 'Select the highlighted destination on the map.'}</p>
+            <p className="instruction">{loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : ''}</p>
           </div>
 
           <section className="region-section" aria-labelledby="region-title">
@@ -143,7 +143,7 @@ function App() {
             loadError={loadError}
             onPick={answer}
           />
-          <div className="map-caption"><span><i className="legend-dot" />COUNTRY BORDERS</span><span>SCROLL TO EXPLORE</span></div>
+          <div className="map-caption"><span><i className="legend-dot" />COUNTRY BORDERS</span><span>NATURAL EARTH / 1:50M</span></div>
         </section>
       </div>
     </main>

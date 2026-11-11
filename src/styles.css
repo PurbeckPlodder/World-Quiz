@@ -38,7 +38,7 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .eyebrow span { color: var(--accent); }
 .question-block { margin: 61px 0 44px; }
 .question-label { color: var(--muted); margin-bottom: 13px; }
-.question-block h1 { margin: 0; max-width: 310px; font-family: 'Fraunces', serif; font-size: clamp(32px, 3vw, 43px); font-weight: 500; line-height: 1.08; letter-spacing: 0; overflow-wrap: anywhere; }
+.question-block h1 { margin: 0; max-width: 310px; font-family: 'Fraunces', serif; font-size: 41px; font-weight: 500; line-height: 1.08; letter-spacing: 0; overflow-wrap: anywhere; }
 .question-block h1 em { font-weight: 500; color: var(--accent); }
 .instruction { margin: 17px 0 0; color: #65736b; font-size: 13px; line-height: 1.55; }
 .section-heading { color: var(--muted); display: flex; align-items: center; justify-content: space-between; }
