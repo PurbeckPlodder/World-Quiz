@@ -8,13 +8,14 @@ import type { Feature, FeatureCollection, Geometry } from 'geojson';
 type CountryProperties = {
   ADMIN: string;
   CONTINENT: string;
+  POP_EST?: number;
   ISO_A3_EH?: string;
   ISO_A3?: string;
   ADM0_A3?: string;
 };
 
 type Country = Feature<Geometry, CountryProperties>;
-type CountryMetadata = { cca2: string; cca3: string; capital?: string[]; population?: number };
+type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
 type QuestionMode = 'name' | 'flag' | 'capital' | 'outline';
 type QuizMode = QuestionMode | 'twenty' | 'matchup';
 const twentyQuestionDurationSeconds = 5 * 60;
@@ -96,7 +97,7 @@ function buildMatchupCountries(countries: Country[], metadata: Map<string, Count
   const eligibleCountries = countries.flatMap((country) => {
     const countryMetadata = metadataFor(country, metadata);
     const capital = countryMetadata?.capital?.[0];
-    const population = countryMetadata?.population;
+    const population = country.properties.POP_EST;
     if (!countryMetadata?.cca2 || !capital || typeof population !== 'number' || !Number.isFinite(population)) return [];
     return [{ id: country.properties.ADMIN, country, capital, flagCode: countryMetadata.cca2.toLowerCase(), population }];
   });
@@ -243,7 +244,7 @@ function MatchupGame({
       </div>
       <p className="matchup-accessibility-hint">You can also focus a block and use the up and down arrow keys to move it.</p>
       <div className="matchup-board-scroll">
-        <div className="matchup-board" aria-label="Match the ten countries across four columns">
+        <div className="matchup-board" aria-label="Match the ten countries across five columns">
           {matchupColumns.map((column) => (
             <section className="matchup-column" key={column} aria-label={`${matchupColumnLabels[column]} blocks`}>
               <h3>{matchupColumnLabels[column]}</h3>
@@ -295,6 +296,7 @@ function App() {
   const [matchupStarted, setMatchupStarted] = useState(false);
   const [matchupFinished, setMatchupFinished] = useState(false);
   const [matchupElapsedSeconds, setMatchupElapsedSeconds] = useState(0);
+  const [matchupError, setMatchupError] = useState('');
   const [target, setTarget] = useState('');
   const [picked, setPicked] = useState('');
   const [locked, setLocked] = useState(false);
@@ -428,8 +430,12 @@ function App() {
 
   function prepareMatchup() {
     const tiles = buildMatchupCountries(countries, metadataByCode);
-    if (tiles.length !== 10) return;
+    if (tiles.length !== 10) {
+      setMatchupError('Matchup needs ten countries with capital, flag, and population data.');
+      return;
+    }
     window.clearTimeout(timer.current);
+    setMatchupError('');
     setMatchupTiles(tiles);
     setMatchupBoard(createMatchupBoard(tiles.map((tile) => tile.id)));
     setMatchupStarted(false);
@@ -442,7 +448,11 @@ function App() {
     const tiles = matchupStarted || matchupFinished
       ? buildMatchupCountries(countries, metadataByCode, matchupTiles.map((tile) => tile.id))
       : matchupTiles;
-    if (tiles.length !== 10) return;
+    if (tiles.length !== 10) {
+      setMatchupError('Could not find ten new countries for this round. Please try again.');
+      return;
+    }
+    setMatchupError('');
     setMatchupTiles(tiles);
     setMatchupBoard(createMatchupBoard(tiles.map((tile) => tile.id)));
     setMatchupElapsedSeconds(0);
@@ -544,6 +554,7 @@ function App() {
             </div>
             {quizMode !== 'matchup' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />Show country name on hover</label>}
             {metadataError && <p className="metadata-note">Flag and capital clues are unavailable right now.</p>}
+            {matchupError && <p className="metadata-note" role="alert">{matchupError}</p>}
           </section>
 
           {questionMode === 'outline' && target && (
