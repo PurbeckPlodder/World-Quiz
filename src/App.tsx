@@ -17,6 +17,7 @@ type Country = Feature<Geometry, CountryProperties>;
 type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
 type QuestionMode = 'name' | 'flag' | 'capital' | 'outline';
 type QuizMode = QuestionMode | 'twenty';
+const twentyQuestionDurationSeconds = 5 * 60;
 type SessionQuestion = { mode: QuestionMode; continent: Continent; target: string };
 type Continent = 'World' | 'Africa' | 'Asia' | 'Europe' | 'North America' | 'South America' | 'Oceania' | 'Antarctica';
 
@@ -91,7 +92,7 @@ function App() {
   const [showHoverName, setShowHoverName] = useState(true);
   const [sessionQuestions, setSessionQuestions] = useState<SessionQuestion[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(60);
+  const [timeRemaining, setTimeRemaining] = useState(twentyQuestionDurationSeconds);
   const [challengeFinished, setChallengeFinished] = useState(false);
   const [target, setTarget] = useState('');
   const [picked, setPicked] = useState('');
@@ -208,7 +209,7 @@ function App() {
     window.clearTimeout(timer.current);
     setSessionQuestions(questions);
     setQuestionIndex(0);
-    setTimeRemaining(60);
+    setTimeRemaining(twentyQuestionDurationSeconds);
     setChallengeFinished(false);
     setQuizMode('twenty');
     setTarget(questions[0].target);
@@ -227,7 +228,7 @@ function App() {
     setChallengeFinished(false);
     setSessionQuestions([]);
     setQuestionIndex(0);
-    setTimeRemaining(60);
+    setTimeRemaining(twentyQuestionDurationSeconds);
     setPicked('');
     setLocked(false);
     setQuizMode(mode);
@@ -269,7 +270,7 @@ function App() {
           <div className="eyebrow"><span>01</span> &nbsp;COUNTRY STUDY</div>
           <div className="question-block" aria-live="polite">
             <div className="question-label">
-              {quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`00:${String(timeRemaining).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
+              {quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
             </div>
             {quizMode === 'twenty' && <div className="challenge-progress">QUESTION {Math.min(questionIndex + 1, 20)} / 20 <span>{activeContinent.toUpperCase()}</span></div>}
             <h1>{loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
@@ -324,7 +325,7 @@ function App() {
         </aside>
 
         <section className="map-section" aria-label="Interactive world map">
-          <div className="map-heading"><div><span className="map-kicker">{questionMode === 'outline' ? 'ONE COUNTRY, NO NEIGHBOURS' : 'THE WORLD, ONE COUNTRY AT A TIME'}</span><span className="map-title">{questionMode === 'outline' ? 'Country outline' : activeContinent === 'World' ? 'World map' : activeContinent}</span></div><div className="map-coordinates">{questionMode === 'outline' ? 'IDENTIFY THE SHAPE' : quizMode === 'twenty' ? '60 SECOND ROUND' : '50° N&nbsp; / &nbsp;20° E'}</div></div>
+          <div className="map-heading"><div><span className="map-kicker">{questionMode === 'outline' ? 'ONE COUNTRY, NO NEIGHBOURS' : 'THE WORLD, ONE COUNTRY AT A TIME'}</span><span className="map-title">{questionMode === 'outline' ? 'Country outline' : activeContinent === 'World' ? 'World map' : activeContinent}</span></div><div className="map-coordinates">{questionMode === 'outline' ? 'IDENTIFY THE SHAPE' : quizMode === 'twenty' ? '5 MINUTE ROUND' : '50° N&nbsp; / &nbsp;20° E'}</div></div>
           {questionMode === 'outline' ? (
             <CountryOutline country={targetCountry} loading={loading} loadError={loadError} />
           ) : (
