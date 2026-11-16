@@ -14,13 +14,13 @@ type CountryProperties = {
 };
 
 type Country = Feature<Geometry, CountryProperties>;
-type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
+type CountryMetadata = { cca2: string; cca3: string; capital?: string[]; population?: number };
 type QuestionMode = 'name' | 'flag' | 'capital' | 'outline';
 type QuizMode = QuestionMode | 'twenty' | 'matchup';
 const twentyQuestionDurationSeconds = 5 * 60;
-const matchupColumns = ['country', 'capital', 'flag', 'outline'] as const;
+const matchupColumns = ['country', 'capital', 'flag', 'outline', 'population'] as const;
 type MatchupColumn = typeof matchupColumns[number];
-type MatchupTile = { id: string; country: Country; capital: string; flagCode: string };
+type MatchupTile = { id: string; country: Country; capital: string; flagCode: string; population: number };
 type MatchupBoard = Record<MatchupColumn, string[]>;
 type SessionQuestion = { mode: QuestionMode; continent: Continent; target: string };
 type Continent = 'World' | 'Africa' | 'Asia' | 'Europe' | 'North America' | 'South America' | 'Oceania' | 'Antarctica';
@@ -32,6 +32,7 @@ const matchupColumnLabels: Record<MatchupColumn, string> = {
   capital: 'CAPITAL',
   flag: 'FLAG',
   outline: 'OUTLINE',
+  population: 'POPULATION',
 };
 const countriesUrl = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson';
 
@@ -90,13 +91,17 @@ function buildTwentyQuestions(countries: Country[], metadata: Map<string, Countr
   return questions.length === 20 ? questions : [];
 }
 
-function buildMatchupCountries(countries: Country[], metadata: Map<string, CountryMetadata>): MatchupTile[] {
-  return shuffle(countries.flatMap((country) => {
+function buildMatchupCountries(countries: Country[], metadata: Map<string, CountryMetadata>, excludedIds: string[] = []): MatchupTile[] {
+  const excluded = new Set(excludedIds);
+  const eligibleCountries = countries.flatMap((country) => {
     const countryMetadata = metadataFor(country, metadata);
     const capital = countryMetadata?.capital?.[0];
-    if (!countryMetadata?.cca2 || !capital) return [];
-    return [{ id: country.properties.ADMIN, country, capital, flagCode: countryMetadata.cca2.toLowerCase() }];
-  })).slice(0, 10);
+    const population = countryMetadata?.population;
+    if (!countryMetadata?.cca2 || !capital || typeof population !== 'number' || !Number.isFinite(population)) return [];
+    return [{ id: country.properties.ADMIN, country, capital, flagCode: countryMetadata.cca2.toLowerCase(), population }];
+  });
+  const freshCountries = eligibleCountries.filter((country) => !excluded.has(country.id));
+  return shuffle(freshCountries.length >= 10 ? freshCountries : eligibleCountries).slice(0, 10);
 }
 
 function createMatchupBoard(ids: string[]): MatchupBoard {
@@ -105,12 +110,13 @@ function createMatchupBoard(ids: string[]): MatchupBoard {
     capital: shuffle(ids),
     flag: shuffle(ids),
     outline: shuffle(ids),
+    population: shuffle(ids),
   };
 }
 
 function countCorrectMatchupRows(board: MatchupBoard) {
   return board.country.reduce((count, id, index) => (
-    id === board.capital[index] && id === board.flag[index] && id === board.outline[index] ? count + 1 : count
+    id === board.capital[index] && id === board.flag[index] && id === board.outline[index] && id === board.population[index] ? count + 1 : count
   ), 0);
 }
 
@@ -185,14 +191,15 @@ function MatchupTileButton({
           onMoveTile(column, tile.id, targetIndex);
         }
       }}
-      aria-label={`${matchupColumnLabels[column].toLowerCase()}: ${column === 'flag' ? tile.country.properties.ADMIN : column === 'outline' ? `${tile.country.properties.ADMIN} outline` : column === 'country' ? tile.country.properties.ADMIN : tile.capital}. Row ${index + 1}${matched ? ', matched' : ''}. Drag to reorder, or use the up and down arrow keys.`}
+      aria-label={`${matchupColumnLabels[column].toLowerCase()}: ${column === 'flag' ? tile.country.properties.ADMIN : column === 'outline' ? `${tile.country.properties.ADMIN} outline` : column === 'population' ? tile.population.toLocaleString() : column === 'country' ? tile.country.properties.ADMIN : tile.capital}. Row ${index + 1}${matched ? ', matched' : ''}. Drag to reorder, or use the up and down arrow keys.`}
       title="Drag to reorder, or use the up and down arrow keys"
     >
       <span className="matchup-tile-number">{String(index + 1).padStart(2, '0')}</span>
       {column === 'country' && <span className="matchup-tile-text">{tile.country.properties.ADMIN}</span>}
       {column === 'capital' && <span className="matchup-tile-text">{tile.capital}</span>}
       {column === 'flag' && <img className="matchup-flag" src={`https://flagcdn.com/w80/${tile.flagCode}.png`} alt="" draggable={false} />}
-      {column === 'outline' && <svg className="matchup-outline" viewBox="0 0 120 64" aria-hidden="true"><path d={outlinePath} /></svg>}
+      {column === 'outline' && <svg className="matchup-outline" viewBox="0 0 120 64" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path d={outlinePath} /></svg>}
+      {column === 'population' && <span className="matchup-tile-text">{tile.population.toLocaleString()}</span>}
     </button>
   );
 }
@@ -225,8 +232,8 @@ function MatchupGame({
     <div className="matchup-game">
       <div className="matchup-game-heading">
         <div>
-          <span className="map-kicker">MATCH THE COUNTRY, CAPITAL, FLAG &amp; OUTLINE</span>
-          <h2>Match Matchup</h2>
+          <span className="map-kicker">MATCH COUNTRY, CAPITAL, FLAG, OUTLINE &amp; POPULATION</span>
+          <h2>Matchup</h2>
         </div>
         <div className="matchup-timer" role="timer" aria-label={`${elapsedSeconds} seconds elapsed`}>{formatElapsedTime(elapsedSeconds)}</div>
       </div>
@@ -244,7 +251,7 @@ function MatchupGame({
                 {board[column].map((id, index) => {
                   const tile = tilesById.get(id);
                   if (!tile) return null;
-                  const matched = id === board.country[index] && id === board.capital[index] && id === board.flag[index] && id === board.outline[index];
+                    const matched = matchupColumns.every((matchupColumn) => id === board[matchupColumn][index]);
                   return (
                     <li key={`${column}-${id}`}>
                       <MatchupTileButton
@@ -432,7 +439,12 @@ function App() {
   }
 
   function startMatchupRound() {
-    setMatchupBoard(createMatchupBoard(matchupTiles.map((tile) => tile.id)));
+    const tiles = matchupStarted || matchupFinished
+      ? buildMatchupCountries(countries, metadataByCode, matchupTiles.map((tile) => tile.id))
+      : matchupTiles;
+    if (tiles.length !== 10) return;
+    setMatchupTiles(tiles);
+    setMatchupBoard(createMatchupBoard(tiles.map((tile) => tile.id)));
     setMatchupElapsedSeconds(0);
     setMatchupFinished(false);
     setMatchupStarted(true);
@@ -513,12 +525,12 @@ function App() {
           <div className="eyebrow"><span>01</span> &nbsp;COUNTRY STUDY</div>
           <div className="question-block" aria-live="polite">
             <div className="question-label">
-              {quizMode === 'matchup' ? 'MATCH MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
+              {quizMode === 'matchup' ? 'MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
             </div>
             {quizMode === 'twenty' && <div className="challenge-progress">QUESTION {Math.min(questionIndex + 1, 20)} / 20 <span>{activeContinent.toUpperCase()}</span></div>}
             <h1>{quizMode === 'matchup' ? matchupFinished ? 'All matched!' : 'Match the clues' : loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
             {questionMode === 'flag' && targetMetadata?.cca2 && <img className="flag-clue" src={`https://flagcdn.com/w320/${targetMetadata.cca2.toLowerCase()}.png`} alt="Flag clue" />}
-            <p className="instruction">{quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all four clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
+            <p className="instruction">{quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all five clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
           </div>
 
           <section className="quiz-settings" aria-label="Quiz options">
@@ -526,7 +538,7 @@ function App() {
             <div className="mode-options" role="group" aria-label="Choose a quiz clue">
               {(['name', 'flag', 'capital', 'outline', 'twenty', 'matchup'] as const).map((mode) => (
                 <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => changeMode(mode)} aria-pressed={quizMode === mode} disabled={((mode === 'flag' || mode === 'capital') && (metadataLoading || metadataError)) || ((mode === 'twenty' || mode === 'matchup') && (loading || metadataLoading || metadataError))}>
-                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : mode === 'twenty' ? '20 Questions' : 'Match Matchup'}
+                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : mode === 'twenty' ? '20 Questions' : 'Matchup'}
                 </button>
               ))}
             </div>
@@ -567,7 +579,7 @@ function App() {
           <div className="panel-footer"><Crosshair size={15} /><span>Every answer is a new bearing.</span></div>
         </aside>
 
-        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Match Matchup game' : 'Interactive world map'}>
+        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Matchup game' : 'Interactive world map'}>
           {quizMode === 'matchup' ? (
             <MatchupGame
               tiles={matchupTiles}
