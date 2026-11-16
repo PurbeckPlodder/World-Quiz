@@ -16,13 +16,23 @@ type CountryProperties = {
 type Country = Feature<Geometry, CountryProperties>;
 type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
 type QuestionMode = 'name' | 'flag' | 'capital' | 'outline';
-type QuizMode = QuestionMode | 'twenty';
+type QuizMode = QuestionMode | 'twenty' | 'matchup';
 const twentyQuestionDurationSeconds = 5 * 60;
+const matchupColumns = ['country', 'capital', 'flag', 'outline'] as const;
+type MatchupColumn = typeof matchupColumns[number];
+type MatchupTile = { id: string; country: Country; capital: string; flagCode: string };
+type MatchupBoard = Record<MatchupColumn, string[]>;
 type SessionQuestion = { mode: QuestionMode; continent: Continent; target: string };
 type Continent = 'World' | 'Africa' | 'Asia' | 'Europe' | 'North America' | 'South America' | 'Oceania' | 'Antarctica';
 
 const continents: Continent[] = ['World', 'Africa', 'Asia', 'Europe', 'North America', 'South America', 'Oceania', 'Antarctica'];
 const challengeContinents: Continent[] = ['Africa', 'Asia', 'Europe', 'South America', 'North America'];
+const matchupColumnLabels: Record<MatchupColumn, string> = {
+  country: 'COUNTRY',
+  capital: 'CAPITAL',
+  flag: 'FLAG',
+  outline: 'OUTLINE',
+};
 const countriesUrl = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson';
 
 function shuffle<T>(items: T[]) {
@@ -80,6 +90,185 @@ function buildTwentyQuestions(countries: Country[], metadata: Map<string, Countr
   return questions.length === 20 ? questions : [];
 }
 
+function buildMatchupCountries(countries: Country[], metadata: Map<string, CountryMetadata>): MatchupTile[] {
+  return shuffle(countries.flatMap((country) => {
+    const countryMetadata = metadataFor(country, metadata);
+    const capital = countryMetadata?.capital?.[0];
+    if (!countryMetadata?.cca2 || !capital) return [];
+    return [{ id: country.properties.ADMIN, country, capital, flagCode: countryMetadata.cca2.toLowerCase() }];
+  })).slice(0, 10);
+}
+
+function createMatchupBoard(ids: string[]): MatchupBoard {
+  return {
+    country: shuffle(ids),
+    capital: shuffle(ids),
+    flag: shuffle(ids),
+    outline: shuffle(ids),
+  };
+}
+
+function countCorrectMatchupRows(board: MatchupBoard) {
+  return board.country.reduce((count, id, index) => (
+    id === board.capital[index] && id === board.flag[index] && id === board.outline[index] ? count + 1 : count
+  ), 0);
+}
+
+function formatElapsedTime(seconds: number) {
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function MatchupTileButton({
+  column,
+  tile,
+  index,
+  matched,
+  enabled,
+  onDropTile,
+  onMoveTile,
+}: {
+  column: MatchupColumn;
+  tile: MatchupTile;
+  index: number;
+  matched: boolean;
+  enabled: boolean;
+  onDropTile: (column: MatchupColumn, sourceId: string, targetId: string) => void;
+  onMoveTile: (column: MatchupColumn, id: string, targetIndex: number) => void;
+}) {
+  const touchPointerId = useRef<number | null>(null);
+  const outlinePath = useMemo(() => {
+    const projection = geoNaturalEarth1().fitExtent([[5, 5], [115, 59]], tile.country);
+    return geoPath(projection)(tile.country) ?? '';
+  }, [tile.country]);
+
+  return (
+    <button
+      className={`matchup-tile${matched ? ' matched' : ''}`}
+      data-matchup-column={column}
+      data-matchup-id={tile.id}
+      draggable={enabled}
+      onPointerDown={(event) => {
+        if (enabled && event.pointerType === 'touch') {
+          touchPointerId.current = event.pointerId;
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+      }}
+      onPointerUp={(event) => {
+        if (touchPointerId.current !== event.pointerId) return;
+        touchPointerId.current = null;
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLButtonElement>('[data-matchup-column]');
+        if (target?.dataset.matchupColumn === column && target.dataset.matchupId) {
+          onDropTile(column, tile.id, target.dataset.matchupId);
+        }
+      }}
+      onPointerCancel={() => { touchPointerId.current = null; }}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', `${column}\n${tile.id}`);
+      }}
+      onDragOver={(event) => {
+        if (enabled && event.dataTransfer.types.includes('text/plain')) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+        }
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        const [sourceColumn, sourceId] = event.dataTransfer.getData('text/plain').split('\n');
+        if (enabled && sourceColumn === column && sourceId) onDropTile(column, sourceId, tile.id);
+      }}
+      onKeyDown={(event) => {
+        if (!enabled) return;
+        const targetIndex = event.key === 'ArrowUp' ? index - 1 : event.key === 'ArrowDown' ? index + 1 : index;
+        if (targetIndex !== index) {
+          event.preventDefault();
+          onMoveTile(column, tile.id, targetIndex);
+        }
+      }}
+      aria-label={`${matchupColumnLabels[column].toLowerCase()}: ${column === 'flag' ? tile.country.properties.ADMIN : column === 'outline' ? `${tile.country.properties.ADMIN} outline` : column === 'country' ? tile.country.properties.ADMIN : tile.capital}. Row ${index + 1}${matched ? ', matched' : ''}. Drag to reorder, or use the up and down arrow keys.`}
+      title="Drag to reorder, or use the up and down arrow keys"
+    >
+      <span className="matchup-tile-number">{String(index + 1).padStart(2, '0')}</span>
+      {column === 'country' && <span className="matchup-tile-text">{tile.country.properties.ADMIN}</span>}
+      {column === 'capital' && <span className="matchup-tile-text">{tile.capital}</span>}
+      {column === 'flag' && <img className="matchup-flag" src={`https://flagcdn.com/w80/${tile.flagCode}.png`} alt="" draggable={false} />}
+      {column === 'outline' && <svg className="matchup-outline" viewBox="0 0 120 64" aria-hidden="true"><path d={outlinePath} /></svg>}
+    </button>
+  );
+}
+
+function MatchupGame({
+  tiles,
+  board,
+  correctRows,
+  elapsedSeconds,
+  started,
+  finished,
+  onStart,
+  onDropTile,
+  onMoveTile,
+}: {
+  tiles: MatchupTile[];
+  board: MatchupBoard;
+  correctRows: number;
+  elapsedSeconds: number;
+  started: boolean;
+  finished: boolean;
+  onStart: () => void;
+  onDropTile: (column: MatchupColumn, sourceId: string, targetId: string) => void;
+  onMoveTile: (column: MatchupColumn, id: string, targetIndex: number) => void;
+}) {
+  const tilesById = useMemo(() => new Map(tiles.map((tile) => [tile.id, tile])), [tiles]);
+  const enabled = started && !finished;
+
+  return (
+    <div className="matchup-game">
+      <div className="matchup-game-heading">
+        <div>
+          <span className="map-kicker">MATCH THE COUNTRY, CAPITAL, FLAG &amp; OUTLINE</span>
+          <h2>Match Matchup</h2>
+        </div>
+        <div className="matchup-timer" role="timer" aria-label={`${elapsedSeconds} seconds elapsed`}>{formatElapsedTime(elapsedSeconds)}</div>
+      </div>
+      <div className="matchup-toolbar">
+        <p>{finished ? 'All ten countries matched. Great work!' : started ? 'Drag blocks within each column to line up matching countries.' : 'Arrange each column so every row shows clues for the same country.'}</p>
+        <button className="matchup-start-button" onClick={onStart}>{finished ? 'Play again' : started ? 'Restart' : 'Start timer'}</button>
+      </div>
+      <p className="matchup-accessibility-hint">You can also focus a block and use the up and down arrow keys to move it.</p>
+      <div className="matchup-board-scroll">
+        <div className="matchup-board" aria-label="Match the ten countries across four columns">
+          {matchupColumns.map((column) => (
+            <section className="matchup-column" key={column} aria-label={`${matchupColumnLabels[column]} blocks`}>
+              <h3>{matchupColumnLabels[column]}</h3>
+              <ol>
+                {board[column].map((id, index) => {
+                  const tile = tilesById.get(id);
+                  if (!tile) return null;
+                  const matched = id === board.country[index] && id === board.capital[index] && id === board.flag[index] && id === board.outline[index];
+                  return (
+                    <li key={`${column}-${id}`}>
+                      <MatchupTileButton
+                        column={column}
+                        tile={tile}
+                        index={index}
+                        matched={matched}
+                        enabled={enabled}
+                        onDropTile={onDropTile}
+                        onMoveTile={onMoveTile}
+                      />
+                    </li>
+                  );
+                })}
+              </ol>
+            </section>
+          ))}
+        </div>
+      </div>
+      <div className="matchup-progress" role="status">{correctRows} / 10 ROWS MATCHED</div>
+    </div>
+  );
+}
+
 function App() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +283,11 @@ function App() {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(twentyQuestionDurationSeconds);
   const [challengeFinished, setChallengeFinished] = useState(false);
+  const [matchupTiles, setMatchupTiles] = useState<MatchupTile[]>([]);
+  const [matchupBoard, setMatchupBoard] = useState<MatchupBoard>(() => createMatchupBoard([]));
+  const [matchupStarted, setMatchupStarted] = useState(false);
+  const [matchupFinished, setMatchupFinished] = useState(false);
+  const [matchupElapsedSeconds, setMatchupElapsedSeconds] = useState(0);
   const [target, setTarget] = useState('');
   const [picked, setPicked] = useState('');
   const [locked, setLocked] = useState(false);
@@ -103,7 +297,7 @@ function App() {
   const countdown = useRef<number | undefined>(undefined);
 
   const currentQuestion = quizMode === 'twenty' ? sessionQuestions[questionIndex] : undefined;
-  const questionMode: QuestionMode = currentQuestion?.mode ?? (quizMode === 'twenty' ? 'name' : quizMode);
+  const questionMode: QuestionMode = currentQuestion?.mode ?? (quizMode === 'twenty' || quizMode === 'matchup' ? 'name' : quizMode);
   const activeContinent = currentQuestion?.continent ?? continent;
   const activeCountries = useMemo(
     () => activeContinent === 'World' ? countries : countries.filter((country) => country.properties.CONTINENT === activeContinent),
@@ -171,6 +365,12 @@ function App() {
   }, [quizMode, challengeFinished]);
 
   useEffect(() => {
+    if (quizMode !== 'matchup' || !matchupStarted || matchupFinished) return;
+    countdown.current = window.setInterval(() => setMatchupElapsedSeconds((seconds) => seconds + 1), 1000);
+    return () => window.clearInterval(countdown.current);
+  }, [quizMode, matchupStarted, matchupFinished]);
+
+  useEffect(() => {
     if (quizMode !== 'twenty' || timeRemaining > 0 || challengeFinished) return;
     window.clearTimeout(timer.current);
     setLocked(true);
@@ -219,13 +419,55 @@ function App() {
     setTotal(0);
   }
 
+  function prepareMatchup() {
+    const tiles = buildMatchupCountries(countries, metadataByCode);
+    if (tiles.length !== 10) return;
+    window.clearTimeout(timer.current);
+    setMatchupTiles(tiles);
+    setMatchupBoard(createMatchupBoard(tiles.map((tile) => tile.id)));
+    setMatchupStarted(false);
+    setMatchupFinished(false);
+    setMatchupElapsedSeconds(0);
+    setQuizMode('matchup');
+  }
+
+  function startMatchupRound() {
+    setMatchupBoard(createMatchupBoard(matchupTiles.map((tile) => tile.id)));
+    setMatchupElapsedSeconds(0);
+    setMatchupFinished(false);
+    setMatchupStarted(true);
+  }
+
+  function moveMatchupTile(column: MatchupColumn, sourceId: string, targetIndex: number) {
+    if (!matchupStarted || matchupFinished) return;
+    const sourceIndex = matchupBoard[column].indexOf(sourceId);
+    if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= matchupBoard[column].length || sourceIndex === targetIndex) return;
+    const movedColumn = [...matchupBoard[column]];
+    movedColumn.splice(sourceIndex, 1);
+    movedColumn.splice(targetIndex, 0, sourceId);
+    const nextBoard = { ...matchupBoard, [column]: movedColumn };
+    setMatchupBoard(nextBoard);
+    if (countCorrectMatchupRows(nextBoard) === 10) setMatchupFinished(true);
+  }
+
+  function dropMatchupTile(column: MatchupColumn, sourceId: string, targetId: string) {
+    const targetIndex = matchupBoard[column].indexOf(targetId);
+    moveMatchupTile(column, sourceId, targetIndex);
+  }
+
   function changeMode(mode: QuizMode) {
     if (mode === 'twenty') {
       startTwentyQuestions();
       return;
     }
+    if (mode === 'matchup') {
+      prepareMatchup();
+      return;
+    }
     window.clearTimeout(timer.current);
     setChallengeFinished(false);
+    setMatchupStarted(false);
+    setMatchupFinished(false);
     setSessionQuestions([]);
     setQuestionIndex(0);
     setTimeRemaining(twentyQuestionDurationSeconds);
@@ -252,6 +494,7 @@ function App() {
   const targetCountry = quizCountries.find((country) => country.properties.ADMIN === target);
   const targetMetadata = targetCountry ? metadataFor(targetCountry, metadataByCode) : undefined;
   const choices = useMemo(() => questionMode === 'outline' ? outlineChoices(quizCountries, target) : [], [quizCountries, questionMode, target]);
+  const correctMatchupRows = countCorrectMatchupRows(matchupBoard);
 
   return (
     <main className="app-shell">
@@ -266,28 +509,28 @@ function App() {
       </header>
 
       <div className="workspace">
-        <aside className={`quiz-panel${questionMode === 'outline' ? ' outline-quiz-panel' : ''}${quizMode === 'twenty' ? ' challenge-quiz-panel' : ''}`}>
+        <aside className={`quiz-panel${questionMode === 'outline' ? ' outline-quiz-panel' : ''}${quizMode === 'twenty' ? ' challenge-quiz-panel' : ''}${quizMode === 'matchup' ? ' matchup-quiz-panel' : ''}`}>
           <div className="eyebrow"><span>01</span> &nbsp;COUNTRY STUDY</div>
           <div className="question-block" aria-live="polite">
             <div className="question-label">
-              {quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
+              {quizMode === 'matchup' ? 'MATCH MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
             </div>
             {quizMode === 'twenty' && <div className="challenge-progress">QUESTION {Math.min(questionIndex + 1, 20)} / 20 <span>{activeContinent.toUpperCase()}</span></div>}
-            <h1>{loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
+            <h1>{quizMode === 'matchup' ? matchupFinished ? 'All matched!' : 'Match the clues' : loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
             {questionMode === 'flag' && targetMetadata?.cca2 && <img className="flag-clue" src={`https://flagcdn.com/w320/${targetMetadata.cca2.toLowerCase()}.png`} alt="Flag clue" />}
-            <p className="instruction">{quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
+            <p className="instruction">{quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all four clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
           </div>
 
           <section className="quiz-settings" aria-label="Quiz options">
             <div className="section-heading"><span>CLUE TYPE</span></div>
             <div className="mode-options" role="group" aria-label="Choose a quiz clue">
-              {(['name', 'flag', 'capital', 'outline', 'twenty'] as const).map((mode) => (
-                <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => changeMode(mode)} aria-pressed={quizMode === mode} disabled={((mode === 'flag' || mode === 'capital') && (metadataLoading || metadataError)) || (mode === 'twenty' && (loading || metadataLoading || metadataError))}>
-                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : '20 Questions'}
+              {(['name', 'flag', 'capital', 'outline', 'twenty', 'matchup'] as const).map((mode) => (
+                <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => changeMode(mode)} aria-pressed={quizMode === mode} disabled={((mode === 'flag' || mode === 'capital') && (metadataLoading || metadataError)) || ((mode === 'twenty' || mode === 'matchup') && (loading || metadataLoading || metadataError))}>
+                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : mode === 'twenty' ? '20 Questions' : 'Match Matchup'}
                 </button>
               ))}
             </div>
-            <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />Show country name on hover</label>
+            {quizMode !== 'matchup' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />Show country name on hover</label>}
             {metadataError && <p className="metadata-note">Flag and capital clues are unavailable right now.</p>}
           </section>
 
@@ -304,7 +547,7 @@ function App() {
             </section>
           )}
 
-          <section className="region-section" aria-labelledby="region-title">
+          {quizMode !== 'matchup' && <section className="region-section" aria-labelledby="region-title">
             <div className="section-heading"><span id="region-title">{quizMode === 'twenty' ? 'REGION · AUTO' : 'REGION'}</span><span className="region-count">{String(continents.indexOf(activeContinent) + 1).padStart(2, '0')} / 08</span></div>
             <div className="region-grid" role="group" aria-label="Choose a region">
               {continents.map((region) => (
@@ -313,36 +556,52 @@ function App() {
                 </button>
               ))}
             </div>
-          </section>
+          </section>}
 
           <section className="score-section" aria-label="Quiz score">
-            <div className="section-heading"><span>SESSION SCORE</span><button className="icon-button reset-button" onClick={resetScore} title="Reset score" aria-label="Reset score"><RotateCcw size={15} /></button></div>
-            <div className="score-row"><strong>{score}<span> / {total}</span></strong><span className="accuracy">{accuracy}%<small> ACCURACY</small></span></div>
-            <div className="score-track" aria-hidden="true"><span style={{ width: `${accuracy}%` }} /></div>
+            <div className="section-heading"><span>{quizMode === 'matchup' ? 'MATCHED ROWS' : 'SESSION SCORE'}</span>{quizMode !== 'matchup' && <button className="icon-button reset-button" onClick={resetScore} title="Reset score" aria-label="Reset score"><RotateCcw size={15} /></button>}</div>
+            <div className="score-row"><strong>{quizMode === 'matchup' ? correctMatchupRows : score}<span> / {quizMode === 'matchup' ? 10 : total}</span></strong>{quizMode === 'matchup' ? <span className="accuracy">ROWS</span> : <span className="accuracy">{accuracy}%<small> ACCURACY</small></span>}</div>
+            <div className="score-track" aria-hidden="true"><span style={{ width: `${quizMode === 'matchup' ? correctMatchupRows * 10 : accuracy}%` }} /></div>
           </section>
 
           <div className="panel-footer"><Crosshair size={15} /><span>Every answer is a new bearing.</span></div>
         </aside>
 
-        <section className="map-section" aria-label="Interactive world map">
-          <div className="map-heading"><div><span className="map-kicker">{questionMode === 'outline' ? 'ONE COUNTRY, NO NEIGHBOURS' : 'THE WORLD, ONE COUNTRY AT A TIME'}</span><span className="map-title">{questionMode === 'outline' ? 'Country outline' : activeContinent === 'World' ? 'World map' : activeContinent}</span></div><div className="map-coordinates">{questionMode === 'outline' ? 'IDENTIFY THE SHAPE' : quizMode === 'twenty' ? '5 MINUTE ROUND' : '50° N&nbsp; / &nbsp;20° E'}</div></div>
-          {questionMode === 'outline' ? (
-            <CountryOutline country={targetCountry} loading={loading} loadError={loadError} />
-          ) : (
-            <MapView
-              countries={activeCountries}
-              continent={activeContinent}
-              target={target}
-              picked={picked}
-              locked={locked}
-              loading={loading}
-              loadError={loadError}
-              answerableNames={answerableNames}
-              showHoverName={showHoverName}
-              onPick={answer}
+        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Match Matchup game' : 'Interactive world map'}>
+          {quizMode === 'matchup' ? (
+            <MatchupGame
+              tiles={matchupTiles}
+              board={matchupBoard}
+              correctRows={correctMatchupRows}
+              elapsedSeconds={matchupElapsedSeconds}
+              started={matchupStarted}
+              finished={matchupFinished}
+              onStart={startMatchupRound}
+              onDropTile={dropMatchupTile}
+              onMoveTile={moveMatchupTile}
             />
+          ) : (
+            <>
+              <div className="map-heading"><div><span className="map-kicker">{questionMode === 'outline' ? 'ONE COUNTRY, NO NEIGHBOURS' : 'THE WORLD, ONE COUNTRY AT A TIME'}</span><span className="map-title">{questionMode === 'outline' ? 'Country outline' : activeContinent === 'World' ? 'World map' : activeContinent}</span></div><div className="map-coordinates">{questionMode === 'outline' ? 'IDENTIFY THE SHAPE' : quizMode === 'twenty' ? '5 MINUTE ROUND' : '50° N&nbsp; / &nbsp;20° E'}</div></div>
+              {questionMode === 'outline' ? (
+                <CountryOutline country={targetCountry} loading={loading} loadError={loadError} />
+              ) : (
+                <MapView
+                  countries={activeCountries}
+                  continent={activeContinent}
+                  target={target}
+                  picked={picked}
+                  locked={locked}
+                  loading={loading}
+                  loadError={loadError}
+                  answerableNames={answerableNames}
+                  showHoverName={showHoverName}
+                  onPick={answer}
+                />
+              )}
+              <div className="map-caption"><span><i className="legend-dot" />{questionMode === 'outline' ? 'TARGET COUNTRY ONLY' : 'COUNTRY BORDERS'}</span><span>NATURAL EARTH / 1:50M</span></div>
+            </>
           )}
-          <div className="map-caption"><span><i className="legend-dot" />{questionMode === 'outline' ? 'TARGET COUNTRY ONLY' : 'COUNTRY BORDERS'}</span><span>NATURAL EARTH / 1:50M</span></div>
         </section>
       </div>
     </main>
