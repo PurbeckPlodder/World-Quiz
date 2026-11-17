@@ -128,6 +128,26 @@ function formatElapsedTime(seconds: number) {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+function correctCountyWinding(feature: CountyFeature): CountyFeature {
+  const { geometry } = feature;
+  if (geometry.type === 'Polygon') {
+    return {
+      ...feature,
+      geometry: { ...geometry, coordinates: geometry.coordinates.map((ring) => [...ring].reverse()) },
+    };
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return {
+      ...feature,
+      geometry: {
+        ...geometry,
+        coordinates: geometry.coordinates.map((polygon) => polygon.map((ring) => [...ring].reverse())),
+      },
+    };
+  }
+  return feature;
+}
+
 function CountyQuiz() {
   const containerRef = useRef<HTMLDivElement>(null);
   const timer = useRef<number | undefined>(undefined);
@@ -149,7 +169,9 @@ function CountyQuiz() {
         return response.json() as Promise<FeatureCollection<Geometry, CountyProperties>>;
       })
       .then((collection) => {
-        const features = collection.features.filter((feature): feature is CountyFeature => Boolean(feature.properties?.shapeName));
+        const features = collection.features
+          .filter((feature): feature is CountyFeature => Boolean(feature.properties?.shapeName))
+          .map(correctCountyWinding);
         if (!features.length) throw new Error('UK county boundary data is empty');
         setCounties(features);
         setTarget(features[Math.floor(Math.random() * features.length)].properties.shapeName);
