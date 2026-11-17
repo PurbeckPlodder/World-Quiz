@@ -558,7 +558,7 @@ function CountyQuiz({
           <span className="tool-divider" />
           <button className="icon-button" onClick={resetZoom} aria-label="Reset county map view" title="Reset map view"><Crosshair size={16} /></button>
         </div>
-        <div className="map-stamp">ATLAS<br /><span>UK COUNTIES</span></div>
+        <div className="map-stamp">ATLAS<br /><span>SELECTED COUNTIES</span></div>
       </div>
       <div className="map-caption"><span><i className="legend-dot" />SELECT A COUNTY ON THE MAP</span><span>BOUNDARIES: GEOBOUNDARIES / NATURAL EARTH</span></div>
     </div>
