@@ -180,6 +180,48 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .whereami-scale i { display: block; height: 6px; border-right: 1px solid #53645c; border-bottom: 2px solid #53645c; border-left: 1px solid #53645c; }
 .whereami-section .map-caption { align-items: center; gap: 8px; font-size: 8px; }
 .whereami-section .map-caption span:last-child { text-align: right; }
+.planetary-quiz-panel { overflow-y: auto; }
+.planetary-quiz-panel .question-block { margin: 24px 0 18px; }
+.planetary-quiz-panel .quiz-settings { padding: 10px 0 12px; }
+.planetary-section { min-height: 0; }
+.planetary-quiz { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.planetary-heading { display: flex; flex: 0 0 auto; align-items: end; justify-content: space-between; gap: 12px; padding: 0 2px 12px; }
+.planetary-heading > div { display: flex; flex-direction: column; gap: 5px; }
+.planetary-heading .map-title { font-size: 25px; }
+.planetary-score { color: #65736b; font-family: var(--mono); font-size: 10px; white-space: nowrap; }
+.planetary-question { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: #e7ebe2; border: 1px solid var(--line); }
+.planetary-question h2 { margin: 3px 0 0; color: var(--accent); font-family: 'Fraunces', serif; font-size: 22px; font-weight: 500; }
+.planetary-question-hint { color: #65736b; font-size: 11px; }
+.planetary-grid { display: grid; flex: 1; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 9px; min-height: 0; margin-top: 12px; }
+.planetary-card { display: flex; min-width: 0; flex-direction: column; overflow: hidden; background: rgba(228, 236, 232, .75); border: 1px solid #c8d6cf; }
+.planetary-card-heading { display: flex; align-items: baseline; gap: 6px; padding: 7px 8px 0; }
+.planetary-card-heading > span:first-child { color: var(--accent); font-family: var(--mono); font-size: 8px; }
+.planetary-card-heading h3 { flex: 1; margin: 0; color: var(--ink); font-family: 'Fraunces', serif; font-size: 15px; font-weight: 500; }
+.planetary-card-heading > span:last-child { color: #78837c; font-family: var(--mono); font-size: 7px; white-space: nowrap; }
+.planetary-orbit { position: relative; flex: 1; min-height: 75px; max-height: 108px; }
+.planetary-orbit svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.planetary-orbit ellipse, .planetary-orbit > svg > circle:not(.planetary-wire-sphere):not(.planetary-wire-latitude), .planetary-orbit path { fill: none; stroke: #8ba69a; stroke-width: .8; vector-effect: non-scaling-stroke; }
+.planetary-orbit .planetary-wire-sphere { fill: rgba(81, 127, 108, .11); stroke: #4e7463; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.planetary-orbit .planetary-wire-latitude { fill: none; stroke: #4e7463; stroke-width: .65; vector-effect: non-scaling-stroke; }
+.planetary-orbit .planetary-wire-longitude { fill: none; stroke: #4e7463; stroke-width: .65; vector-effect: non-scaling-stroke; }
+.planetary-orbit .planetary-moon-dot { fill: #c7583f; stroke: #f2f1e9; stroke-width: .7; vector-effect: non-scaling-stroke; }
+.planetary-body { position: absolute; top: 50%; left: 50%; display: grid; width: 35px; height: 35px; place-items: center; padding: 0; transform: translate(-50%, -50%); background: rgba(210, 221, 214, .95); border: 1px solid #4e7463; border-radius: 50%; color: #315343; font-family: var(--mono); font-size: 6px; cursor: pointer; }
+.planetary-body::before { position: absolute; content: ''; inset: 5px 11px; border: 1px solid rgba(78, 116, 99, .55); border-radius: 50%; }
+.planetary-body:disabled { cursor: default; }
+.planetary-body-jupiter { width: 48px; height: 48px; }
+.planetary-body-saturn::after { position: absolute; content: ''; width: 56px; height: 18px; border: 1px solid #8a7952; border-radius: 50%; transform: rotate(-24deg); }
+.planetary-body-uranus::after { position: absolute; content: ''; width: 48px; height: 16px; border: 1px solid #8a7952; border-radius: 50%; transform: rotate(66deg); }
+.planetary-body.correct, .planetary-moon.correct { background-color: #73a985; border-color: #39704b; color: #fff; }
+.planetary-body.wrong, .planetary-moon.wrong { background-color: #d47a61; border-color: #a84735; color: #fff; }
+.planetary-body.answer, .planetary-moon.answer { background-color: #e2eee4; border-color: #39704b; color: #315343; }
+.planetary-moons { display: flex; min-height: 34px; align-content: flex-start; flex-wrap: wrap; gap: 4px; padding: 0 7px 7px; }
+.planetary-moon { display: inline-flex; min-width: 0; align-items: center; gap: 4px; padding: 3px 5px; background: #f2f1e9; border: 1px solid #c8d6cf; color: #42584c; font-size: 8px; cursor: pointer; }
+.planetary-moon i { width: 5px; height: 5px; flex: 0 0 auto; background: #c7583f; border-radius: 50%; }
+.planetary-moon:disabled { cursor: default; }
+.planetary-no-moons { align-self: center; color: #7c8980; font-size: 8px; }
+.planetary-caption { display: flex; flex: 0 0 auto; justify-content: space-between; gap: 8px; padding: 10px 1px 0; color: #879188; font-family: var(--mono); font-size: 8px; }
+.planetary-caption span { display: flex; align-items: center; gap: 7px; }
+.planetary-caption span:last-child { text-align: right; }
 .matchup-game { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .matchup-game-heading, .matchup-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .matchup-game-heading { padding: 0 2px 12px; }
@@ -247,6 +289,11 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
   .whereami-feedback, .whereami-question .matchup-start-button { grid-column: 1; grid-row: auto; }
   .whereami-heading { align-items: center; }
   .whereami-section .map-caption { flex-wrap: wrap; }
+  .planetary-section { min-height: 780px; }
+  .planetary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(145px, auto)); }
+  .planetary-question { align-items: flex-start; }
+  .planetary-question-hint { max-width: 120px; text-align: right; }
+  .planetary-caption { flex-wrap: wrap; }
 }
 
 @media (prefers-reduced-motion: reduce) {

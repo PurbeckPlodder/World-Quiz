@@ -30,7 +30,8 @@ type CountyProperties = { shapeName: string; shapeID?: string; region?: CountyRe
 type CountyFeature = Feature<Geometry, CountyProperties>;
 type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
 type QuestionMode = 'name' | 'flag' | 'capital' | 'outline';
-type QuizMode = QuestionMode | 'twenty' | 'matchup' | 'counties' | 'whereami';
+type QuizMode = QuestionMode | 'twenty' | 'matchup' | 'counties' | 'whereami' | 'planets';
+type SolarSystemPlanet = { name: string; moons: string[] };
 const twentyQuestionDurationSeconds = 5 * 60;
 const matchupColumns = ['country', 'capital', 'flag', 'outline', 'population'] as const;
 type MatchupColumn = typeof matchupColumns[number];
@@ -53,6 +54,17 @@ const ukCitiesUrl = 'uk-cities.json';
 const ukCountiesUrl = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/GBR/ADM2/geoBoundaries-GBR-ADM2_simplified.geojson';
 const irelandCountiesUrl = 'ireland-counties.geojson';
 const countyRegions: CountyRegion[] = ['England', 'Wales', 'Scotland', 'Northern Ireland', 'Ireland'];
+const solarSystemPlanets: SolarSystemPlanet[] = [
+  { name: 'Mercury', moons: [] },
+  { name: 'Venus', moons: [] },
+  { name: 'Earth', moons: ['Moon'] },
+  { name: 'Mars', moons: ['Phobos', 'Deimos'] },
+  { name: 'Jupiter', moons: ['Io', 'Europa', 'Ganymede', 'Callisto'] },
+  { name: 'Saturn', moons: ['Titan', 'Enceladus', 'Rhea', 'Iapetus'] },
+  { name: 'Uranus', moons: ['Miranda', 'Ariel', 'Umbriel', 'Titania', 'Oberon'] },
+  { name: 'Neptune', moons: ['Triton'] },
+];
+const solarSystemBodies = solarSystemPlanets.flatMap((planet) => [planet.name, ...planet.moons]);
 
 function shuffle<T>(items: T[]) {
   const shuffledItems = [...items];
@@ -855,6 +867,112 @@ function WhereAmIGame({
   );
 }
 
+function PlanetaryQuiz() {
+  const [target, setTarget] = useState(() => solarSystemBodies[Math.floor(Math.random() * solarSystemBodies.length)]);
+  const [picked, setPicked] = useState('');
+  const [score, setScore] = useState(0);
+  const [total, setTotal] = useState(0);
+
+  function answer(body: string) {
+    if (picked) return;
+    setPicked(body);
+    setTotal((value) => value + 1);
+    if (body === target) setScore((value) => value + 1);
+  }
+
+  function nextQuestion() {
+    const choices = solarSystemBodies.filter((body) => body !== target);
+    setTarget(choices[Math.floor(Math.random() * choices.length)]);
+    setPicked('');
+  }
+
+  const accuracy = total ? Math.round((score / total) * 100) : 0;
+
+  return (
+    <div className="planetary-quiz">
+      <div className="planetary-heading">
+        <div>
+          <span className="map-kicker">OUR SOLAR SYSTEM</span>
+          <span className="map-title">Planets &amp; moons</span>
+        </div>
+        <span className="planetary-score">{score} / {total} correct · {accuracy}%</span>
+      </div>
+      <div className="planetary-question" aria-live="polite">
+        <div>
+          <span className="map-kicker">{picked ? 'ANSWER' : 'FIND THIS WORLD'}</span>
+          <h2>{picked ? picked === target ? 'Correct — well done.' : `The answer was ${target}.` : target}</h2>
+        </div>
+        {picked
+          ? <button className="matchup-start-button" onClick={nextQuestion}>Next world</button>
+          : <span className="planetary-question-hint">Click a planet or one of its moons.</span>}
+      </div>
+      <div className="planetary-grid" role="group" aria-label="Schematic diagram of the planets and selected major moons">
+        {solarSystemPlanets.map((planet, index) => {
+          const planetStatus = picked
+            ? planet.name === picked ? planet.name === target ? ' correct' : ' wrong' : planet.name === target ? ' answer' : ''
+            : '';
+          return (
+            <article className={`planetary-card${planetStatus ? ` ${planetStatus.trim()}` : ''}`} key={planet.name}>
+              <div className="planetary-card-heading">
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <h3>{planet.name}</h3>
+                <span>{planet.moons.length ? `${planet.moons.length} ${planet.moons.length === 1 ? 'MOON' : 'MOONS'}` : 'NO MOONS'}</span>
+              </div>
+              <div className={`planetary-orbit planetary-${planet.name.toLowerCase()}`}>
+                <svg viewBox="0 0 220 104" aria-hidden="true">
+                  <ellipse cx="110" cy="52" rx="33" ry="15" />
+                  <ellipse cx="110" cy="52" rx="55" ry="25" />
+                  <ellipse cx="110" cy="52" rx="82" ry="37" />
+                  <circle className="planetary-wire-sphere" cx="110" cy="52" r="15" />
+                  <ellipse className="planetary-wire-latitude" cx="110" cy="52" rx="15" ry="5" />
+                  <path className="planetary-wire-longitude" d="M110 37 C101 44 101 60 110 67 M110 37 C119 44 119 60 110 67" />
+                  {planet.moons.map((moon, moonIndex) => {
+                    const angle = (moonIndex / Math.max(planet.moons.length, 1)) * Math.PI * 2 - Math.PI / 2;
+                    const orbit = 1 + moonIndex % 3;
+                    const radii = [33, 55, 82];
+                    const x = 110 + Math.cos(angle) * radii[orbit - 1];
+                    const y = 52 + Math.sin(angle) * radii[orbit - 1] * 0.45;
+                    return <circle key={moon} className="planetary-moon-dot" cx={x} cy={y} r="2.5" />;
+                  })}
+                </svg>
+                <button
+                  type="button"
+                  className={`planetary-body planetary-body-${planet.name.toLowerCase()}${planetStatus}`}
+                  onClick={() => answer(planet.name)}
+                  disabled={Boolean(picked)}
+                  aria-label={`Select planet ${planet.name}`}
+                >
+                  <span>{planet.name}</span>
+                </button>
+              </div>
+              <div className="planetary-moons" aria-label={`${planet.name} moons`}>
+                {planet.moons.length ? planet.moons.map((moon) => {
+                  const status = picked
+                    ? moon === picked ? moon === target ? ' correct' : ' wrong' : moon === target ? ' answer' : ''
+                    : '';
+                  return (
+                    <button
+                      type="button"
+                      className={`planetary-moon${status}`}
+                      key={moon}
+                      onClick={() => answer(moon)}
+                      disabled={Boolean(picked)}
+                      aria-label={`Select moon ${moon}, orbiting ${planet.name}`}
+                    >
+                      <i aria-hidden="true" />{moon}
+                    </button>
+                  );
+                }) : <span className="planetary-no-moons">No confirmed natural moons</span>}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      <div className="planetary-caption"><span><i className="legend-dot" />SELECT A PLANET OR MOON</span><span>SCHEMATIC · NOT TO SCALE · FEATURED MOONS</span></div>
+    </div>
+  );
+}
+
 function MatchupTileButton({
   column,
   tile,
@@ -1038,7 +1156,7 @@ function App() {
   const countdown = useRef<number | undefined>(undefined);
 
   const currentQuestion = quizMode === 'twenty' ? sessionQuestions[questionIndex] : undefined;
-  const questionMode: QuestionMode = currentQuestion?.mode ?? (quizMode === 'twenty' || quizMode === 'matchup' || quizMode === 'counties' || quizMode === 'whereami' ? 'name' : quizMode);
+  const questionMode: QuestionMode = currentQuestion?.mode ?? (quizMode === 'twenty' || quizMode === 'matchup' || quizMode === 'counties' || quizMode === 'whereami' || quizMode === 'planets' ? 'name' : quizMode);
   const activeContinent = currentQuestion?.continent ?? continent;
   const activeCountries = useMemo(
     () => activeContinent === 'World' ? countries : countries.filter((country) => country.properties.CONTINENT === activeContinent),
@@ -1263,24 +1381,24 @@ function App() {
       </header>
 
       <div className="workspace">
-        <aside className={`quiz-panel${questionMode === 'outline' ? ' outline-quiz-panel' : ''}${quizMode === 'twenty' ? ' challenge-quiz-panel' : ''}${quizMode === 'matchup' ? ' matchup-quiz-panel' : ''}${quizMode === 'counties' ? ' counties-quiz-panel' : ''}${quizMode === 'whereami' ? ' whereami-quiz-panel' : ''}`}>
+        <aside className={`quiz-panel${questionMode === 'outline' ? ' outline-quiz-panel' : ''}${quizMode === 'twenty' ? ' challenge-quiz-panel' : ''}${quizMode === 'matchup' ? ' matchup-quiz-panel' : ''}${quizMode === 'counties' ? ' counties-quiz-panel' : ''}${quizMode === 'whereami' ? ' whereami-quiz-panel' : ''}${quizMode === 'planets' ? ' planetary-quiz-panel' : ''}`}>
           <div className="eyebrow"><span>01</span> &nbsp;COUNTRY STUDY</div>
           <div className="question-block" aria-live="polite">
             <div className="question-label">
-              {quizMode === 'counties' ? 'COUNTY QUIZ' : quizMode === 'whereami' ? 'WHERE AM I?' : quizMode === 'matchup' ? 'MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
+              {quizMode === 'counties' ? 'COUNTY QUIZ' : quizMode === 'whereami' ? 'WHERE AM I?' : quizMode === 'planets' ? 'PLANET & MOON QUIZ' : quizMode === 'matchup' ? 'MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
             </div>
             {quizMode === 'twenty' && <div className="challenge-progress">QUESTION {Math.min(questionIndex + 1, 20)} / 20 <span>{activeContinent.toUpperCase()}</span></div>}
-            <h1>{quizMode === 'counties' ? 'Explore the counties' : quizMode === 'whereami' ? 'Trace the distances' : quizMode === 'matchup' ? matchupFinished ? 'All matched!' : 'Match the clues' : loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
+            <h1>{quizMode === 'counties' ? 'Explore the counties' : quizMode === 'whereami' ? 'Trace the distances' : quizMode === 'planets' ? 'Explore our solar system' : quizMode === 'matchup' ? matchupFinished ? 'All matched!' : 'Match the clues' : loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
             {questionMode === 'flag' && targetMetadata?.cca2 && <img className="flag-clue" src={`https://flagcdn.com/w320/${targetMetadata.cca2.toLowerCase()}.png`} alt="Flag clue" />}
-            <p className="instruction">{quizMode === 'counties' ? 'Select the county named on the map.' : quizMode === 'whereami' ? 'Match a UK place to its geodesic distances from three others.' : quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all five clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
+            <p className="instruction">{quizMode === 'counties' ? 'Select the county named on the map.' : quizMode === 'whereami' ? 'Match a UK place to its geodesic distances from three others.' : quizMode === 'planets' ? 'Identify the planets and their featured natural moons.' : quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all five clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
           </div>
 
           <section className="quiz-settings" aria-label="Quiz options">
             <div className="section-heading"><span>CLUE TYPE</span></div>
             <div className="mode-options" role="group" aria-label="Choose a quiz clue">
-              {(['name', 'flag', 'capital', 'outline', 'twenty', 'matchup', 'counties', 'whereami'] as const).map((mode) => (
+              {(['name', 'flag', 'capital', 'outline', 'twenty', 'matchup', 'counties', 'whereami', 'planets'] as const).map((mode) => (
                 <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => changeMode(mode)} aria-pressed={quizMode === mode} disabled={((mode === 'flag' || mode === 'capital') && (metadataLoading || metadataError)) || ((mode === 'twenty' || mode === 'matchup') && (loading || metadataLoading || metadataError))}>
-                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : mode === 'twenty' ? '20 Questions' : mode === 'matchup' ? 'Matchup' : mode === 'counties' ? 'UK Counties' : 'Where am I?'}
+                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : mode === 'twenty' ? '20 Questions' : mode === 'matchup' ? 'Matchup' : mode === 'counties' ? 'UK Counties' : mode === 'whereami' ? 'Where am I?' : 'Planets & Moons'}
                 </button>
               ))}
             </div>
@@ -1304,7 +1422,7 @@ function App() {
                 </div>
               </section>
             )}
-            {quizMode !== 'matchup' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />{quizMode === 'counties' ? 'Show county names on hover' : quizMode === 'whereami' ? 'Show place names on hover' : 'Show country name on hover'}</label>}
+            {quizMode !== 'matchup' && quizMode !== 'planets' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />{quizMode === 'counties' ? 'Show county names on hover' : quizMode === 'whereami' ? 'Show place names on hover' : 'Show country name on hover'}</label>}
             {quizMode === 'whereami' && <label className="hover-toggle"><input type="checkbox" checked={highlightDistancePlaces} onChange={(event) => setHighlightDistancePlaces(event.target.checked)} />Highlight clue cities and distances</label>}
             {metadataError && <p className="metadata-note">Flag and capital clues are unavailable right now.</p>}
             {matchupError && <p className="metadata-note" role="alert">{matchupError}</p>}
@@ -1323,7 +1441,7 @@ function App() {
             </section>
           )}
 
-          {quizMode !== 'matchup' && quizMode !== 'counties' && quizMode !== 'whereami' && <section className="region-section" aria-labelledby="region-title">
+          {quizMode !== 'matchup' && quizMode !== 'counties' && quizMode !== 'whereami' && quizMode !== 'planets' && <section className="region-section" aria-labelledby="region-title">
             <div className="section-heading"><span id="region-title">{quizMode === 'twenty' ? 'REGION · AUTO' : 'REGION'}</span><span className="region-count">{String(continents.indexOf(activeContinent) + 1).padStart(2, '0')} / 08</span></div>
             <div className="region-grid" role="group" aria-label="Choose a region">
               {continents.map((region) => (
@@ -1334,7 +1452,7 @@ function App() {
             </div>
           </section>}
 
-          {quizMode !== 'counties' && quizMode !== 'whereami' && <section className="score-section" aria-label="Quiz score">
+          {quizMode !== 'counties' && quizMode !== 'whereami' && quizMode !== 'planets' && <section className="score-section" aria-label="Quiz score">
             <div className="section-heading"><span>{quizMode === 'matchup' ? 'MATCHED ROWS' : 'SESSION SCORE'}</span>{quizMode !== 'matchup' && <button className="icon-button reset-button" onClick={resetScore} title="Reset score" aria-label="Reset score"><RotateCcw size={15} /></button>}</div>
             <div className="score-row"><strong>{quizMode === 'matchup' ? correctMatchupRows : score}<span> / {quizMode === 'matchup' ? 10 : total}</span></strong>{quizMode === 'matchup' ? <span className="accuracy">ROWS</span> : <span className="accuracy">{accuracy}%<small> ACCURACY</small></span>}</div>
             <div className="score-track" aria-hidden="true"><span style={{ width: `${quizMode === 'matchup' ? correctMatchupRows * 10 : accuracy}%` }} /></div>
@@ -1343,9 +1461,11 @@ function App() {
           <div className="panel-footer"><Crosshair size={15} /><span>Every answer is a new bearing.</span></div>
         </aside>
 
-        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}${quizMode === 'counties' ? ' county-map-section' : ''}${quizMode === 'whereami' ? ' whereami-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Matchup game' : quizMode === 'counties' ? 'County quiz' : quizMode === 'whereami' ? 'Where am I UK distance quiz' : 'Interactive world map'}>
+        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}${quizMode === 'counties' ? ' county-map-section' : ''}${quizMode === 'whereami' ? ' whereami-section' : ''}${quizMode === 'planets' ? ' planetary-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Matchup game' : quizMode === 'counties' ? 'County quiz' : quizMode === 'whereami' ? 'Where am I UK distance quiz' : quizMode === 'planets' ? 'Planets and moons quiz' : 'Interactive world map'}>
           {quizMode === 'counties' ? (
             <CountyQuiz selectedRegions={selectedCountyRegions} showHoverName={showHoverName} />
+          ) : quizMode === 'planets' ? (
+            <PlanetaryQuiz />
           ) : quizMode === 'whereami' ? (
             <WhereAmIGame countries={countries} loading={loading} loadError={loadError} showHoverName={showHoverName} highlightDistancePlaces={highlightDistancePlaces} />
           ) : quizMode === 'matchup' ? (
