@@ -184,44 +184,45 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .planetary-quiz-panel .question-block { margin: 24px 0 18px; }
 .planetary-quiz-panel .quiz-settings { padding: 10px 0 12px; }
 .planetary-section { min-height: 0; }
-.planetary-quiz { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-.planetary-heading { display: flex; flex: 0 0 auto; align-items: end; justify-content: space-between; gap: 12px; padding: 0 2px 12px; }
+.planetary-quiz { display: flex; flex: 1; flex-direction: column; gap: 12px; min-height: 0; }
+.planetary-heading { display: flex; flex: 0 0 auto; align-items: end; justify-content: space-between; gap: 12px; }
 .planetary-heading > div { display: flex; flex-direction: column; gap: 5px; }
 .planetary-heading .map-title { font-size: 25px; }
 .planetary-score { color: #65736b; font-family: var(--mono); font-size: 10px; white-space: nowrap; }
-.planetary-question { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: #e7ebe2; border: 1px solid var(--line); }
-.planetary-question h2 { margin: 3px 0 0; color: var(--accent); font-family: 'Fraunces', serif; font-size: 22px; font-weight: 500; }
-.planetary-question-hint { color: #65736b; font-size: 11px; }
-.planetary-grid { display: grid; flex: 1; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 9px; min-height: 0; margin-top: 12px; }
-.planetary-card { display: flex; min-width: 0; flex-direction: column; overflow: hidden; background: rgba(228, 236, 232, .75); border: 1px solid #c8d6cf; }
-.planetary-card-heading { display: flex; align-items: baseline; gap: 6px; padding: 7px 8px 0; }
-.planetary-card-heading > span:first-child { color: var(--accent); font-family: var(--mono); font-size: 8px; }
-.planetary-card-heading h3 { flex: 1; margin: 0; color: var(--ink); font-family: 'Fraunces', serif; font-size: 15px; font-weight: 500; }
-.planetary-card-heading > span:last-child { color: #78837c; font-family: var(--mono); font-size: 7px; white-space: nowrap; }
-.planetary-orbit { position: relative; flex: 1; min-height: 75px; max-height: 108px; }
-.planetary-orbit svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.planetary-orbit ellipse, .planetary-orbit > svg > circle:not(.planetary-wire-sphere):not(.planetary-wire-latitude), .planetary-orbit path { fill: none; stroke: #8ba69a; stroke-width: .8; vector-effect: non-scaling-stroke; }
-.planetary-orbit .planetary-wire-sphere { fill: rgba(81, 127, 108, .11); stroke: #4e7463; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
-.planetary-orbit .planetary-wire-latitude { fill: none; stroke: #4e7463; stroke-width: .65; vector-effect: non-scaling-stroke; }
-.planetary-orbit .planetary-wire-longitude { fill: none; stroke: #4e7463; stroke-width: .65; vector-effect: non-scaling-stroke; }
-.planetary-orbit .planetary-moon-dot { fill: #c7583f; stroke: #f2f1e9; stroke-width: .7; vector-effect: non-scaling-stroke; }
-.planetary-body { position: absolute; top: 50%; left: 50%; display: grid; width: 35px; height: 35px; place-items: center; padding: 0; transform: translate(-50%, -50%); background: rgba(210, 221, 214, .95); border: 1px solid #4e7463; border-radius: 50%; color: #315343; font-family: var(--mono); font-size: 6px; cursor: pointer; }
-.planetary-body::before { position: absolute; content: ''; inset: 5px 11px; border: 1px solid rgba(78, 116, 99, .55); border-radius: 50%; }
-.planetary-body:disabled { cursor: default; }
-.planetary-body-jupiter { width: 48px; height: 48px; }
-.planetary-body-saturn::after { position: absolute; content: ''; width: 56px; height: 18px; border: 1px solid #8a7952; border-radius: 50%; transform: rotate(-24deg); }
-.planetary-body-uranus::after { position: absolute; content: ''; width: 48px; height: 16px; border: 1px solid #8a7952; border-radius: 50%; transform: rotate(66deg); }
-.planetary-body.correct, .planetary-moon.correct { background-color: #73a985; border-color: #39704b; color: #fff; }
-.planetary-body.wrong, .planetary-moon.wrong { background-color: #d47a61; border-color: #a84735; color: #fff; }
-.planetary-body.answer, .planetary-moon.answer { background-color: #e2eee4; border-color: #39704b; color: #315343; }
-.planetary-moons { display: flex; min-height: 34px; align-content: flex-start; flex-wrap: wrap; gap: 4px; padding: 0 7px 7px; }
-.planetary-moon { display: inline-flex; min-width: 0; align-items: center; gap: 4px; padding: 3px 5px; background: #f2f1e9; border: 1px solid #c8d6cf; color: #42584c; font-size: 8px; cursor: pointer; }
-.planetary-moon i { width: 5px; height: 5px; flex: 0 0 auto; background: #c7583f; border-radius: 50%; }
-.planetary-moon:disabled { cursor: default; }
-.planetary-no-moons { align-self: center; color: #7c8980; font-size: 8px; }
-.planetary-caption { display: flex; flex: 0 0 auto; justify-content: space-between; gap: 8px; padding: 10px 1px 0; color: #879188; font-family: var(--mono); font-size: 8px; }
-.planetary-caption span { display: flex; align-items: center; gap: 7px; }
-.planetary-caption span:last-child { text-align: right; }
+.solar-system-diagram { position: relative; flex: 0 0 44%; min-height: 180px; max-height: 310px; overflow: hidden; border: 1px solid #d5dfd9; background: var(--ocean); }
+.solar-system-diagram::before { position: absolute; content: ''; inset: 0; opacity: .46; background-image: linear-gradient(rgba(85, 123, 112, .055) 1px, transparent 1px), linear-gradient(90deg, rgba(85, 123, 112, .055) 1px, transparent 1px); background-size: 36px 36px; pointer-events: none; }
+.solar-system-diagram svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.solar-orbit-line { fill: none; stroke: #9eb4a8; stroke-width: 1; stroke-dasharray: 2 4; vector-effect: non-scaling-stroke; }
+.solar-planet-point { fill: #e4ece8; stroke: #547866; stroke-width: 1.3; vector-effect: non-scaling-stroke; }
+.solar-planet-jupiter { fill: #d4b28f; }
+.solar-planet-saturn { fill: #dbc99b; }
+.solar-planet-uranus { fill: #add5d0; }
+.solar-planet-neptune { fill: #719cc3; }
+.solar-planet-latitude, .solar-planet-longitude { fill: none; stroke: #547866; stroke-width: .7; vector-effect: non-scaling-stroke; pointer-events: none; }
+.solar-moon-point { fill: #d07859; stroke: #e4ece8; stroke-width: .6; vector-effect: non-scaling-stroke; }
+.solar-planet-ring { fill: none; stroke: #a18d61; stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.solar-sun-point { fill: #e3ae58; stroke: #c58a38; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.solar-sun-line { fill: none; stroke: #c58a38; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.solar-diagram-note { position: absolute; right: 9px; bottom: 7px; color: #63776c; font-family: var(--mono); font-size: 8px; letter-spacing: .06em; }
+.planetary-question { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px; background: #e7ebe2; border: 1px solid var(--line); }
+.planetary-progress-track { height: 3px; margin: 6px 0 11px; background: #d2dcd4; }
+.planetary-progress-track i { display: block; height: 100%; background: var(--accent); transition: width .2s ease; }
+.planetary-progress h2 { margin: 0 0 10px; color: var(--ink); font-family: 'Fraunces', serif; font-size: clamp(18px, 2vw, 23px); font-weight: 500; line-height: 1.2; }
+.planetary-answer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.planetary-answer { min-height: 34px; padding: 6px 9px; background: #f5f3e9; border: 1px solid #cad4ca; color: #42584c; text-align: left; font-size: 11px; cursor: pointer; }
+.planetary-answer:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); }
+.planetary-answer:disabled { cursor: default; }
+.planetary-answer.correct { background: #73a985; border-color: #39704b; color: #fff; }
+.planetary-answer.wrong { background: #d47a61; border-color: #a84735; color: #fff; }
+.planetary-response { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; margin-top: 10px; }
+.planetary-feedback, .planetary-fact { grid-column: 1; margin: 0; color: #53645c; font-size: 11px; line-height: 1.45; }
+.planetary-feedback { color: var(--accent); font-weight: 600; }
+.planetary-fact strong { color: var(--ink); }
+.planetary-response .matchup-start-button { grid-column: 2; grid-row: 1 / span 2; }
+.planetary-complete { display: flex; height: 100%; min-height: 180px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 8px; }
+.planetary-complete h2, .planetary-complete p { margin: 0; }
+.planetary-complete h2 { color: var(--accent); font-family: 'Fraunces', serif; font-size: 26px; font-weight: 500; }
+.planetary-complete p { margin-bottom: 5px; color: #65736b; font-size: 12px; }
 .matchup-game { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .matchup-game-heading, .matchup-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .matchup-game-heading { padding: 0 2px 12px; }
@@ -290,10 +291,11 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
   .whereami-heading { align-items: center; }
   .whereami-section .map-caption { flex-wrap: wrap; }
   .planetary-section { min-height: 780px; }
-  .planetary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(145px, auto)); }
-  .planetary-question { align-items: flex-start; }
-  .planetary-question-hint { max-width: 120px; text-align: right; }
-  .planetary-caption { flex-wrap: wrap; }
+  .planetary-quiz { min-height: 700px; }
+  .solar-system-diagram { flex-basis: 31%; min-height: 180px; }
+  .planetary-question { flex: 1 0 auto; }
+  .planetary-response { grid-template-columns: 1fr; }
+  .planetary-response .matchup-start-button { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 5px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
