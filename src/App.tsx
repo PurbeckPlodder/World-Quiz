@@ -15,7 +15,8 @@ type CountryProperties = {
 };
 
 type Country = Feature<Geometry, CountryProperties>;
-type CountyProperties = { shapeName: string; shapeID?: string };
+type CountyRegion = 'England' | 'Wales' | 'Scotland' | 'Northern Ireland' | 'Ireland';
+type CountyProperties = { shapeName: string; shapeID?: string; region?: CountyRegion };
 type CountyFeature = Feature<Geometry, CountyProperties>;
 type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
 type QuestionMode = 'name' | 'flag' | 'capital' | 'outline';
@@ -39,6 +40,8 @@ const matchupColumnLabels: Record<MatchupColumn, string> = {
 };
 const countriesUrl = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson';
 const ukCountiesUrl = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/GBR/ADM2/geoBoundaries-GBR-ADM2_simplified.geojson';
+const irelandCountiesUrl = 'ireland-counties.geojson';
+const countyRegions: CountyRegion[] = ['England', 'Wales', 'Scotland', 'Northern Ireland', 'Ireland'];
 
 function shuffle<T>(items: T[]) {
   const shuffledItems = [...items];
@@ -272,6 +275,50 @@ const COUNTY_TARGETS_BY_AREA = Object.entries(COUNTY_AREA_GROUPS).reduce<Record<
   {},
 );
 
+const COUNTY_TARGETS_BY_REGION: Record<CountyRegion, string[]> = {
+  England: [
+    'Bedfordshire', 'Berkshire', 'Bristol', 'Buckinghamshire', 'Cambridgeshire', 'Cheshire', 'City of London',
+    'Cornwall', 'County Durham', 'Cumbria', 'Derbyshire', 'Devon', 'Dorset', 'East Riding of Yorkshire',
+    'East Sussex', 'Essex', 'Gloucestershire', 'Greater London', 'Greater Manchester', 'Hampshire',
+    'Herefordshire', 'Hertfordshire', 'Isle of Wight', 'Kent', 'Lancashire', 'Leicestershire', 'Lincolnshire',
+    'Merseyside', 'Norfolk', 'North Somerset', 'North Yorkshire', 'Northamptonshire', 'Northumberland',
+    'Nottinghamshire', 'Oxfordshire', 'Rutland', 'Shropshire', 'Somerset', 'South Gloucestershire',
+    'South Yorkshire', 'Staffordshire', 'Suffolk', 'Surrey', 'Tyne & Wear', 'Warwickshire', 'West Midlands',
+    'West Sussex', 'West Yorkshire', 'Wiltshire', 'Worcestershire',
+  ],
+  Wales: [
+    'Blaenau Gwent', 'Bridgend', 'Caerphilly', 'Cardiff', 'Carmarthenshire', 'Ceredigion', 'Conwy',
+    'Denbighshire', 'Flintshire', 'Gwynedd', 'Isle of Anglesey', 'Merthyr Tydfil', 'Monmouthshire',
+    'Neath Port Talbot', 'Newport', 'Pembrokeshire', 'Powys', 'Rhondda Cynon Taff', 'Swansea', 'Torfaen',
+    'Vale of Glamorgan', 'Wrexham',
+  ],
+  Scotland: [
+    'Aberdeenshire', 'Angus', 'Argyll & Bute', 'Ayrshire', 'Banffshire', 'Berwickshire', 'Caithness',
+    'Clackmannanshire', 'Dumfries & Galloway', 'East Ayrshire', 'East Dunbartonshire', 'East Lothian',
+    'East Renfrewshire', 'Fife', 'Highland', 'Inverclyde', 'Kincardineshire', 'Lanarkshire', 'Midlothian',
+    'Moray', 'North Ayrshire', 'North Lanarkshire', 'Orkney', 'Perth & Kinross', 'Renfrewshire',
+    'Scottish Borders', 'Shetland', 'South Ayrshire', 'South Lanarkshire', 'Stirlingshire',
+    'West Dunbartonshire', 'West Lothian', 'Western Isles',
+  ],
+  'Northern Ireland': ['Antrim', 'Armagh', 'County Down', 'Fermanagh', 'Londonderry', 'Tyrone'],
+  Ireland: [
+    'Carlow', 'Cavan', 'Clare', 'Cork', 'Donegal', 'Dublin', 'Galway', 'Kerry', 'Kildare', 'Kilkenny',
+    'Laois', 'Leitrim', 'Limerick', 'Longford', 'Louth', 'Mayo', 'Meath', 'Monaghan', 'Offaly',
+    'Roscommon', 'Sligo', 'Tipperary', 'Waterford', 'Westmeath', 'Wexford', 'Wicklow',
+  ],
+};
+
+function countyTargetsForFeature(feature: CountyFeature) {
+  return feature.properties.region === 'Ireland'
+    ? [feature.properties.shapeName]
+    : COUNTY_TARGETS_BY_AREA[feature.properties.shapeName] ?? [];
+}
+
+function countyTargetsForRegions(features: CountyFeature[], regions: CountyRegion[]) {
+  const targetsInRegions = new Set(regions.flatMap((region) => COUNTY_TARGETS_BY_REGION[region]));
+  return [...targetsInRegions].filter((target) => features.some((feature) => countyTargetsForFeature(feature).includes(target)));
+}
+
 function countyProjection(counties: CountyFeature[], width: number, height: number) {
   const positions = counties.flatMap(({ geometry }) => (
     geometry.type === 'Polygon'
@@ -301,14 +348,19 @@ function countyProjection(counties: CountyFeature[], width: number, height: numb
   });
 }
 
-function CountyQuiz() {
+function CountyQuiz({
+  selectedRegions,
+  showHoverName,
+}: {
+  selectedRegions: CountyRegion[];
+  showHoverName: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const groupRef = useRef<SVGGElement>(null);
   const behaviorRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const [counties, setCounties] = useState<CountyFeature[]>([]);
-  const [countyTargets, setCountyTargets] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [target, setTarget] = useState('');
@@ -317,28 +369,45 @@ function CountyQuiz() {
   const [score, setScore] = useState(0);
   const [total, setTotal] = useState(0);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const countyTargets = useMemo(() => countyTargetsForRegions(counties, selectedRegions), [counties, selectedRegions]);
+  const selectedTargetNames = useMemo(() => new Set(countyTargets), [countyTargets]);
+  const playableCounties = useMemo(
+    () => counties.filter((county) => countyTargetsForFeature(county).some((name) => selectedTargetNames.has(name))),
+    [counties, selectedTargetNames],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(ukCountiesUrl, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error('UK county boundary request failed');
-        return response.json() as Promise<FeatureCollection<Geometry, CountyProperties>>;
-      })
-      .then((collection) => {
-        const features = collection.features
+    Promise.all([
+      fetch(ukCountiesUrl, { signal: controller.signal }),
+      fetch(irelandCountiesUrl, { signal: controller.signal }),
+    ])
+      .then(async ([ukResponse, irelandResponse]) => {
+        if (!ukResponse.ok) throw new Error('UK county boundary request failed');
+        if (!irelandResponse.ok) throw new Error('Ireland county boundary request failed');
+        const [ukCollection, irelandCollection] = await Promise.all([
+          ukResponse.json() as Promise<FeatureCollection<Geometry, CountyProperties>>,
+          irelandResponse.json() as Promise<FeatureCollection<Geometry, CountyProperties>>,
+        ]);
+        const ukFeatures = ukCollection.features
           .filter((feature): feature is CountyFeature => Boolean(feature.properties?.shapeName))
           .map(correctCountyWinding);
-        if (!features.length) throw new Error('UK county boundary data is empty');
-        const areaNames = new Set(features.map((feature) => feature.properties.shapeName));
+        if (!ukFeatures.length) throw new Error('UK county boundary data is empty');
+        const irelandFeatures = irelandCollection.features
+          .filter((feature): feature is CountyFeature => Boolean(feature.properties?.shapeName && feature.properties.region === 'Ireland'))
+          .map(correctCountyWinding);
+        const features = [...ukFeatures, ...irelandFeatures];
+        const areaNames = new Set(ukFeatures.map((feature) => feature.properties.shapeName));
         const missingTargets = Object.entries(COUNTY_AREA_GROUPS)
           .filter(([, areas]) => !areas.split('|').some((area) => areaNames.has(area)))
           .map(([name]) => name);
         if (missingTargets.length) throw new Error(`UK county boundaries are missing groups: ${missingTargets.join(', ')}`);
-        const targets = Object.keys(COUNTY_AREA_GROUPS);
-        const playableFeatures = features.filter((feature) => COUNTY_TARGETS_BY_AREA[feature.properties.shapeName]);
-        setCounties(playableFeatures);
-        setCountyTargets(targets);
+        const missingIrelandTargets = COUNTY_TARGETS_BY_REGION.Ireland.filter(
+          (name) => !irelandFeatures.some((feature) => feature.properties.shapeName === name),
+        );
+        if (missingIrelandTargets.length) throw new Error(`Ireland county boundaries are missing: ${missingIrelandTargets.join(', ')}`);
+        const targets = countyTargetsForRegions(features, countyRegions);
+        setCounties(features);
         setTarget(targets[Math.floor(Math.random() * targets.length)]);
       })
       .catch((error: unknown) => {
@@ -377,11 +446,25 @@ function CountyQuiz() {
     };
   }, []);
 
+  useEffect(() => {
+    window.clearTimeout(timer.current);
+    setPicked('');
+    setScore(0);
+    setTotal(0);
+    setTarget(countyTargets[Math.floor(Math.random() * countyTargets.length)] ?? '');
+    setHoveredName('');
+    resetZoom();
+  }, [selectedRegions, counties]);
+
+  useEffect(() => {
+    if (!showHoverName) setHoveredName('');
+  }, [showHoverName]);
+
   const path = useMemo(() => {
-    if (!size.width || !size.height || !counties.length) return null;
-    const projection = countyProjection(counties, size.width, size.height);
+    if (!size.width || !size.height || !playableCounties.length) return null;
+    const projection = countyProjection(playableCounties, size.width, size.height);
     return geoPath(projection);
-  }, [counties, size]);
+  }, [playableCounties, size]);
 
   function answer(county: CountyFeature) {
     if (picked || !target) return;
@@ -389,7 +472,7 @@ function CountyQuiz() {
     setPicked(answerName);
     setHoveredName('');
     setTotal((value) => value + 1);
-    if (COUNTY_TARGETS_BY_AREA[answerName]?.includes(target)) setScore((value) => value + 1);
+    if (countyTargetsForFeature(county).includes(target)) setScore((value) => value + 1);
     timer.current = window.setTimeout(() => {
       setTarget((currentTarget) => {
         const options = countyTargets.filter((name) => name !== currentTarget);
@@ -424,7 +507,7 @@ function CountyQuiz() {
   return (
     <div className="county-quiz">
       <div className="map-heading">
-        <div><span className="map-kicker">ENGLAND · SCOTLAND · WALES · NORTHERN IRELAND</span><span className="map-title">United Kingdom counties</span></div>
+        <div><span className="map-kicker">{selectedRegions.join(' · ').toUpperCase()}</span><span className="map-title">County explorer</span></div>
         <button className="icon-button reset-button" onClick={resetScore} title="Reset county score" aria-label="Reset county score"><RotateCcw size={15} /></button>
       </div>
       <div className="county-question" aria-live="polite">
@@ -433,41 +516,41 @@ function CountyQuiz() {
         <span className="county-score">{score} / {total} correct · {accuracy}% accuracy</span>
       </div>
       <div className="map-canvas county-map-canvas" ref={containerRef}>
-        <svg ref={svgRef} className="world-map" aria-label="Interactive map of UK counties">
+        <svg ref={svgRef} className="world-map" aria-label={`Interactive map of ${selectedRegions.join(', ')} counties`}>
           <g ref={groupRef}>
-            {path && counties.map((county, index) => {
-            const name = county.properties.shapeName;
-            const targetNames = COUNTY_TARGETS_BY_AREA[name] ?? [];
-            if (!targetNames.length) return null;
-            const isPicked = name === picked;
-            const isAnswer = targetNames.includes(target);
-            const status = isPicked ? (isAnswer ? 'correct' : 'wrong') : picked && isAnswer ? 'answer' : '';
-            return (
-              <path
-                key={county.properties.shapeID ?? `${name}-${index}`}
-                d={path(county) ?? undefined}
-                className={`country-shape county-shape${status ? ` ${status}` : ''}${picked ? ' locked' : ''}`}
-                role="button"
-                tabIndex={picked ? -1 : 0}
-                aria-label={targetNames.join(' / ')}
-                aria-disabled={Boolean(picked)}
-                onMouseEnter={() => { if (!picked) setHoveredName(targetNames.join(' / ')); }}
-                onMouseLeave={() => setHoveredName('')}
-                onFocus={() => { if (!picked) setHoveredName(targetNames.join(' / ')); }}
-                onBlur={() => setHoveredName('')}
-                onClick={() => answer(county)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    answer(county);
-                  }
-                }}
-              />
-            );
+            {path && playableCounties.map((county, index) => {
+              const name = county.properties.shapeName;
+              const targetNames = countyTargetsForFeature(county);
+              if (!targetNames.length) return null;
+              const isPicked = name === picked;
+              const isAnswer = targetNames.includes(target);
+              const status = isPicked ? (isAnswer ? 'correct' : 'wrong') : picked && isAnswer ? 'answer' : '';
+              return (
+                <path
+                  key={county.properties.shapeID ?? `${name}-${index}`}
+                  d={path(county) ?? undefined}
+                  className={`country-shape county-shape${status ? ` ${status}` : ''}${picked ? ' locked' : ''}`}
+                  role="button"
+                  tabIndex={picked ? -1 : 0}
+                  aria-label={targetNames.join(' / ')}
+                  aria-disabled={Boolean(picked)}
+                  onMouseEnter={() => { if (!picked && showHoverName) setHoveredName(targetNames.join(' / ')); }}
+                  onMouseLeave={() => setHoveredName('')}
+                  onFocus={() => { if (!picked && showHoverName) setHoveredName(targetNames.join(' / ')); }}
+                  onBlur={() => setHoveredName('')}
+                  onClick={() => answer(county)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      answer(county);
+                    }
+                  }}
+                />
+              );
             })}
           </g>
         </svg>
-        {hoveredName && !picked && <div className="country-hover-label" role="status">{hoveredName}</div>}
+        {showHoverName && hoveredName && !picked && <div className="country-hover-label" role="status">{hoveredName}</div>}
         {(loading || loadError) && <div className="map-message" role={loadError ? 'alert' : 'status'}>{loadError ? 'Could not load UK county boundaries. Please try again later.' : 'Loading county boundaries…'}</div>}
         <div className="map-tools county-map-tools" aria-label="County map controls">
           <button className="icon-button" onClick={() => zoomBy(1.5)} aria-label="Zoom in to counties" title="Zoom in"><ZoomIn size={17} /></button>
@@ -477,7 +560,7 @@ function CountyQuiz() {
         </div>
         <div className="map-stamp">ATLAS<br /><span>UK COUNTIES</span></div>
       </div>
-      <div className="map-caption"><span><i className="legend-dot" />SELECT A COUNTY ON THE MAP</span><span>BOUNDARIES: GEOBOUNDARIES / OGL 3.0</span></div>
+      <div className="map-caption"><span><i className="legend-dot" />SELECT A COUNTY ON THE MAP</span><span>BOUNDARIES: GEOBOUNDARIES / NATURAL EARTH</span></div>
     </div>
   );
 }
@@ -644,6 +727,7 @@ function App() {
   const [continent, setContinent] = useState<Continent>('World');
   const [quizMode, setQuizMode] = useState<QuizMode>('name');
   const [showHoverName, setShowHoverName] = useState(true);
+  const [selectedCountyRegions, setSelectedCountyRegions] = useState<CountyRegion[]>(countyRegions);
   const [sessionQuestions, setSessionQuestions] = useState<SessionQuestion[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(twentyQuestionDurationSeconds);
@@ -892,12 +976,12 @@ function App() {
           <div className="eyebrow"><span>01</span> &nbsp;COUNTRY STUDY</div>
           <div className="question-block" aria-live="polite">
             <div className="question-label">
-              {quizMode === 'counties' ? 'UK COUNTIES' : quizMode === 'matchup' ? 'MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
+              {quizMode === 'counties' ? 'COUNTY QUIZ' : quizMode === 'matchup' ? 'MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
             </div>
             {quizMode === 'twenty' && <div className="challenge-progress">QUESTION {Math.min(questionIndex + 1, 20)} / 20 <span>{activeContinent.toUpperCase()}</span></div>}
             <h1>{quizMode === 'counties' ? 'Explore the counties' : quizMode === 'matchup' ? matchupFinished ? 'All matched!' : 'Match the clues' : loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
             {questionMode === 'flag' && targetMetadata?.cca2 && <img className="flag-clue" src={`https://flagcdn.com/w320/${targetMetadata.cca2.toLowerCase()}.png`} alt="Flag clue" />}
-            <p className="instruction">{quizMode === 'counties' ? 'Select the county or local area named on the map.' : quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all five clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
+            <p className="instruction">{quizMode === 'counties' ? 'Select the county named on the map.' : quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all five clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
           </div>
 
           <section className="quiz-settings" aria-label="Quiz options">
@@ -909,7 +993,27 @@ function App() {
                 </button>
               ))}
             </div>
-            {quizMode !== 'matchup' && quizMode !== 'counties' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />Show country name on hover</label>}
+            {quizMode === 'counties' && (
+              <section className="county-region-section" aria-label="Choose included regions">
+                <div className="section-heading"><span>INCLUDE AREAS</span></div>
+                <div className="county-region-grid" role="group" aria-label="Select counties from">
+                  {countyRegions.map((region) => (
+                    <label className="county-region-option" key={region}>
+                      <input
+                        type="checkbox"
+                        checked={selectedCountyRegions.includes(region)}
+                        disabled={selectedCountyRegions.length === 1 && selectedCountyRegions.includes(region)}
+                        onChange={(event) => setSelectedCountyRegions((regions) => (
+                          event.target.checked ? [...regions, region] : regions.filter((value) => value !== region)
+                        ))}
+                      />
+                      {region}
+                    </label>
+                  ))}
+                </div>
+              </section>
+            )}
+            {quizMode !== 'matchup' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />{quizMode === 'counties' ? 'Show county names on hover' : 'Show country name on hover'}</label>}
             {metadataError && <p className="metadata-note">Flag and capital clues are unavailable right now.</p>}
             {matchupError && <p className="metadata-note" role="alert">{matchupError}</p>}
           </section>
@@ -947,9 +1051,9 @@ function App() {
           <div className="panel-footer"><Crosshair size={15} /><span>Every answer is a new bearing.</span></div>
         </aside>
 
-        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}${quizMode === 'counties' ? ' county-map-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Matchup game' : quizMode === 'counties' ? 'United Kingdom counties quiz' : 'Interactive world map'}>
+        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}${quizMode === 'counties' ? ' county-map-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Matchup game' : quizMode === 'counties' ? 'County quiz' : 'Interactive world map'}>
           {quizMode === 'counties' ? (
-            <CountyQuiz />
+            <CountyQuiz selectedRegions={selectedCountyRegions} showHoverName={showHoverName} />
           ) : quizMode === 'matchup' ? (
             <MatchupGame
               tiles={matchupTiles}

@@ -65,6 +65,11 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .mode-option:disabled { color: #a0a69e; cursor: not-allowed; }
 .hover-toggle { display: flex; align-items: center; gap: 9px; margin-top: 13px; color: #52615a; font-size: 12px; cursor: pointer; }
 .hover-toggle input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
+.county-region-section { margin-top: 16px; }
+.county-region-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 10px; margin-top: 10px; }
+.county-region-option { display: flex; align-items: center; gap: 7px; color: #52615a; font-size: 11px; cursor: pointer; }
+.county-region-option input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
+.county-region-option input:disabled { cursor: not-allowed; }
 .metadata-note { margin: 8px 0 0; color: #9c4a36; font-size: 11px; line-height: 1.4; }
 .outline-choices { padding: 0 0 14px; }
 .outline-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
@@ -144,6 +149,7 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .county-map-section .map-caption span:last-child { text-align: right; }
 .counties-quiz-panel .question-block { margin: 26px 0; }
 .counties-quiz-panel .quiz-settings { padding: 10px 0 12px; }
+.counties-quiz-panel { overflow-y: auto; }
 .matchup-game { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .matchup-game-heading, .matchup-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .matchup-game-heading { padding: 0 2px 12px; }
