@@ -158,7 +158,7 @@ function countyProjection(counties: CountyFeature[], width: number, height: numb
   ));
   const mercatorY = (latitude: number) => Math.log(Math.tan(Math.PI / 4 + latitude * Math.PI / 360));
   const longitudes = positions.map(([longitude]) => longitude * Math.PI / 180);
-  const latitudes = positions.map(([longitude, latitude]) => mercatorY(latitude));
+  const latitudes = positions.map((position) => mercatorY(position[1]));
   const minLongitude = Math.min(...longitudes);
   const maxLongitude = Math.max(...longitudes);
   const minLatitude = Math.min(...latitudes);
