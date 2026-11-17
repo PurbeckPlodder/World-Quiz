@@ -170,9 +170,14 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .whereami-land { fill: #f5f3e9; stroke: #738a7d; stroke-width: 1.4; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .whereami-marker { fill: var(--accent); stroke: #f5f3e9; stroke-width: 1.3; vector-effect: non-scaling-stroke; cursor: pointer; transition: fill .12s ease; }
 .whereami-marker:hover, .whereami-marker:focus-visible { fill: #172b2b; outline: none; }
+.whereami-marker.clue { fill: #2e7b68; }
 .whereami-marker.correct, .whereami-marker.answer { fill: #39704b; }
 .whereami-marker.wrong { fill: #d47a61; }
 .whereami-marker.locked { cursor: default; }
+.whereami-clue-halo { fill: rgba(46, 123, 104, .16); stroke: #2e7b68; stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.whereami-clue-label { fill: #172b2b; stroke: #f5f3e9; stroke-width: 3px; paint-order: stroke; font-family: var(--mono); font-size: 9px; pointer-events: none; }
+.whereami-scale { position: absolute; z-index: 2; right: 16px; bottom: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 5px 7px; background: rgba(242, 241, 233, .9); color: #53645c; font-family: var(--mono); font-size: 9px; pointer-events: none; }
+.whereami-scale i { display: block; height: 6px; border-right: 1px solid #53645c; border-bottom: 2px solid #53645c; border-left: 1px solid #53645c; }
 .whereami-section .map-caption { align-items: center; gap: 8px; font-size: 8px; }
 .whereami-section .map-caption span:last-child { text-align: right; }
 .matchup-game { display: flex; flex: 1; flex-direction: column; min-height: 0; }

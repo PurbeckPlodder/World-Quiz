@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { geoNaturalEarth1, geoPath, geoGraticule10, geoMercator, geoTransform } from 'd3-geo';
+import { geoNaturalEarth1, geoPath, geoGraticule10, geoMercator, geoTransform, geoDistance } from 'd3-geo';
 import { select } from 'd3-selection';
 import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom';
 import { Crosshair, Globe2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
@@ -631,11 +631,13 @@ function WhereAmIGame({
   loading,
   loadError,
   showHoverName,
+  highlightDistancePlaces,
 }: {
   countries: Country[];
   loading: boolean;
   loadError: boolean;
   showHoverName: boolean;
+  highlightDistancePlaces: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -649,6 +651,7 @@ function WhereAmIGame({
   const [score, setScore] = useState(0);
   const [total, setTotal] = useState(0);
   const [hoveredPlace, setHoveredPlace] = useState('');
+  const [zoomTransform, setZoomTransform] = useState({ x: 0, y: 0, k: 1 });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -692,7 +695,10 @@ function WhereAmIGame({
     const selection = select(svg);
     const behavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent([1, 10])
-      .on('zoom', (event) => select(group).attr('transform', event.transform.toString()));
+      .on('zoom', (event) => {
+        select(group).attr('transform', event.transform.toString());
+        setZoomTransform(event.transform);
+      });
     behaviorRef.current = behavior;
     selection.call(behavior);
     return () => { selection.on('.zoom', null); };
@@ -704,6 +710,24 @@ function WhereAmIGame({
     return geoMercator().fitExtent([[18, 18], [size.width - 18, size.height - 18]], ukFeature);
   }, [size, ukFeature]);
   const path = useMemo(() => projection ? geoPath(projection) : null, [projection]);
+  const scale = useMemo(() => {
+    if (!projection || !size.width || !size.height) return null;
+    const center = projection.invert([
+      (size.width / 2 - zoomTransform.x) / zoomTransform.k,
+      (size.height / 2 - zoomTransform.y) / zoomTransform.k,
+    ]);
+    const east = projection.invert([
+      (size.width / 2 - zoomTransform.x) / zoomTransform.k + 100 / zoomTransform.k,
+      (size.height / 2 - zoomTransform.y) / zoomTransform.k,
+    ]);
+    if (!center || !east) return null;
+    const milesPer100Pixels = geoDistance(center, east) * 3958.7613;
+    if (!Number.isFinite(milesPer100Pixels) || milesPer100Pixels <= 0) return null;
+    const magnitude = 10 ** Math.floor(Math.log10(milesPer100Pixels));
+    const distanceMiles = [5, 2, 1].map((multiple) => multiple * magnitude).find((distance) => distance <= milesPer100Pixels);
+    if (!distanceMiles) return null;
+    return { distanceMiles, width: (distanceMiles / milesPer100Pixels) * 100 };
+  }, [projection, size, zoomTransform]);
 
   function zoomBy(factor: number) {
     const svg = svgRef.current;
@@ -737,6 +761,7 @@ function WhereAmIGame({
 
   const accuracy = total ? Math.round((score / total) * 100) : 0;
   const pending = !placesError && (!places.length || !puzzle);
+  const cluePlaces = new Map(puzzle?.clues.map((clue) => [clue.place.geonameId, clue]) ?? []);
 
   return (
     <div className="whereami-game">
@@ -767,32 +792,40 @@ function WhereAmIGame({
             {projection && places.map((place) => {
               const point = projection([place.longitude, place.latitude]);
               if (!point) return null;
+              const clue = highlightDistancePlaces ? cluePlaces.get(place.geonameId) : undefined;
               const isPicked = place.name === picked;
               const isAnswer = place.name === puzzle?.target.name;
               const status = picked ? (isPicked ? (isAnswer ? 'correct' : 'wrong') : isAnswer ? 'answer' : '') : '';
               return (
-                <circle
-                  key={place.geonameId}
-                  cx={point[0]}
-                  cy={point[1]}
-                  r={status ? 6 : 3.5}
-                  className={`whereami-marker${status ? ` ${status}` : ''}${picked ? ' locked' : ''}`}
-                  role="button"
-                  tabIndex={picked ? -1 : 0}
-                  aria-label={place.name}
-                  aria-disabled={Boolean(picked)}
-                  onMouseEnter={() => { if (showHoverName) setHoveredPlace(place.name); }}
-                  onMouseLeave={() => setHoveredPlace('')}
-                  onFocus={() => { if (showHoverName) setHoveredPlace(place.name); }}
-                  onBlur={() => setHoveredPlace('')}
-                  onClick={() => answer(place)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      answer(place);
-                    }
-                  }}
-                />
+                <g key={place.geonameId}>
+                  {clue && <circle className="whereami-clue-halo" cx={point[0]} cy={point[1]} r={8} />}
+                  <circle
+                    cx={point[0]}
+                    cy={point[1]}
+                    r={status ? 6 : clue ? 5 : 3.5}
+                    className={`whereami-marker${clue ? ' clue' : ''}${status ? ` ${status}` : ''}${picked ? ' locked' : ''}`}
+                    role="button"
+                    tabIndex={picked ? -1 : 0}
+                    aria-label={`${place.name}${clue ? `, clue city, ${clue.distanceMiles.toFixed(1)} miles from the answer` : ''}`}
+                    aria-disabled={Boolean(picked)}
+                    onMouseEnter={() => { if (showHoverName) setHoveredPlace(place.name); }}
+                    onMouseLeave={() => setHoveredPlace('')}
+                    onFocus={() => { if (showHoverName) setHoveredPlace(place.name); }}
+                    onBlur={() => setHoveredPlace('')}
+                    onClick={() => answer(place)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        answer(place);
+                      }
+                    }}
+                  />
+                  {clue && (
+                    <text className="whereami-clue-label" x={point[0] + 8} y={point[1] - 8}>
+                      {clue.place.name} · {clue.distanceMiles.toFixed(1)} mi
+                    </text>
+                  )}
+                </g>
               );
             })}
           </g>
@@ -809,6 +842,12 @@ function WhereAmIGame({
           <span className="tool-divider" />
           <button className="icon-button" onClick={resetZoom} aria-label="Reset UK map view" title="Reset map view"><Crosshair size={16} /></button>
         </div>
+        {scale && (
+          <div className="whereami-scale" aria-label={`Map scale: ${scale.distanceMiles} miles`}>
+            <span>{scale.distanceMiles} mi</span>
+            <i style={{ width: `${scale.width}px` }} />
+          </div>
+        )}
         <div className="map-stamp">ATLAS<br /><span>UK PLACES</span></div>
       </div>
       <div className="map-caption"><span><i className="legend-dot" />SELECT A PLACE ON THE MAP</span><span>STRAIGHT-LINE DISTANCES · MILES</span></div>
@@ -978,6 +1017,7 @@ function App() {
   const [continent, setContinent] = useState<Continent>('World');
   const [quizMode, setQuizMode] = useState<QuizMode>('name');
   const [showHoverName, setShowHoverName] = useState(true);
+  const [highlightDistancePlaces, setHighlightDistancePlaces] = useState(false);
   const [selectedCountyRegions, setSelectedCountyRegions] = useState<CountyRegion[]>(countyRegions);
   const [sessionQuestions, setSessionQuestions] = useState<SessionQuestion[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -1265,6 +1305,7 @@ function App() {
               </section>
             )}
             {quizMode !== 'matchup' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />{quizMode === 'counties' ? 'Show county names on hover' : quizMode === 'whereami' ? 'Show place names on hover' : 'Show country name on hover'}</label>}
+            {quizMode === 'whereami' && <label className="hover-toggle"><input type="checkbox" checked={highlightDistancePlaces} onChange={(event) => setHighlightDistancePlaces(event.target.checked)} />Highlight clue cities and distances</label>}
             {metadataError && <p className="metadata-note">Flag and capital clues are unavailable right now.</p>}
             {matchupError && <p className="metadata-note" role="alert">{matchupError}</p>}
           </section>
@@ -1306,7 +1347,7 @@ function App() {
           {quizMode === 'counties' ? (
             <CountyQuiz selectedRegions={selectedCountyRegions} showHoverName={showHoverName} />
           ) : quizMode === 'whereami' ? (
-            <WhereAmIGame countries={countries} loading={loading} loadError={loadError} showHoverName={showHoverName} />
+            <WhereAmIGame countries={countries} loading={loading} loadError={loadError} showHoverName={showHoverName} highlightDistancePlaces={highlightDistancePlaces} />
           ) : quizMode === 'matchup' ? (
             <MatchupGame
               tiles={matchupTiles}
