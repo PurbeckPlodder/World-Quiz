@@ -711,7 +711,7 @@ function WhereAmIGame({
   }, [size, ukFeature]);
   const path = useMemo(() => projection ? geoPath(projection) : null, [projection]);
   const scale = useMemo(() => {
-    if (!projection || !size.width || !size.height) return null;
+    if (!projection || !projection.invert || !size.width || !size.height) return null;
     const center = projection.invert([
       (size.width / 2 - zoomTransform.x) / zoomTransform.k,
       (size.height / 2 - zoomTransform.y) / zoomTransform.k,
