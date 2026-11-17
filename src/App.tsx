@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { geoMercator, geoNaturalEarth1, geoPath, geoGraticule10 } from 'd3-geo';
+import { geoNaturalEarth1, geoPath, geoGraticule10, geoTransform } from 'd3-geo';
 import { select } from 'd3-selection';
 import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom';
 import { Crosshair, Globe2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
@@ -148,6 +148,35 @@ function correctCountyWinding(feature: CountyFeature): CountyFeature {
   return feature;
 }
 
+function countyProjection(counties: CountyFeature[], width: number, height: number) {
+  const positions = counties.flatMap(({ geometry }) => (
+    geometry.type === 'Polygon'
+      ? geometry.coordinates.flat()
+      : geometry.type === 'MultiPolygon'
+        ? geometry.coordinates.flat(2)
+        : []
+  ));
+  const mercatorY = (latitude: number) => Math.log(Math.tan(Math.PI / 4 + latitude * Math.PI / 360));
+  const longitudes = positions.map(([longitude]) => longitude * Math.PI / 180);
+  const latitudes = positions.map(([longitude, latitude]) => mercatorY(latitude));
+  const minLongitude = Math.min(...longitudes);
+  const maxLongitude = Math.max(...longitudes);
+  const minLatitude = Math.min(...latitudes);
+  const maxLatitude = Math.max(...latitudes);
+  const scale = Math.min((width - 48) / (maxLongitude - minLongitude), (height - 48) / (maxLatitude - minLatitude));
+  const offsetX = (width - (maxLongitude - minLongitude) * scale) / 2 - minLongitude * scale;
+  const offsetY = (height - (maxLatitude - minLatitude) * scale) / 2 + maxLatitude * scale;
+
+  return geoTransform({
+    point(longitude, latitude) {
+      this.stream.point(
+        offsetX + longitude * Math.PI / 180 * scale,
+        offsetY - mercatorY(latitude) * scale,
+      );
+    },
+  });
+}
+
 function CountyQuiz() {
   const containerRef = useRef<HTMLDivElement>(null);
   const timer = useRef<number | undefined>(undefined);
@@ -198,10 +227,7 @@ function CountyQuiz() {
 
   const path = useMemo(() => {
     if (!size.width || !size.height || !counties.length) return null;
-    const projection = geoMercator().fitExtent(
-      [[24, 24], [size.width - 24, size.height - 24]],
-      { type: 'FeatureCollection', features: counties },
-    );
+    const projection = countyProjection(counties, size.width, size.height);
     return geoPath(projection);
   }, [counties, size]);
 
