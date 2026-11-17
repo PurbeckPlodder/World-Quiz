@@ -4,6 +4,7 @@ import { select } from 'd3-selection';
 import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom';
 import { Crosshair, Globe2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
+import { createRiversRound, createSolarSystemRound, riverQuestionCount, solarSystemQuestionCount, type TopicQuizQuestion } from './topicQuizzes';
 
 type CountryProperties = {
   ADMIN: string;
@@ -30,8 +31,7 @@ type CountyProperties = { shapeName: string; shapeID?: string; region?: CountyRe
 type CountyFeature = Feature<Geometry, CountyProperties>;
 type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
 type QuestionMode = 'name' | 'flag' | 'capital' | 'outline';
-type QuizMode = QuestionMode | 'twenty' | 'matchup' | 'counties' | 'whereami' | 'planets';
-type PlanetQuizQuestion = { question: string; options: string[]; answer: string; fact: string };
+type QuizMode = QuestionMode | 'twenty' | 'matchup' | 'counties' | 'whereami' | 'planets' | 'rivers';
 type SolarSystemOrbit = { name: string; rx: number; ry: number; angle: number; radius: number; moons: number; rings?: boolean };
 const twentyQuestionDurationSeconds = 5 * 60;
 const matchupColumns = ['country', 'capital', 'flag', 'outline', 'population'] as const;
@@ -55,33 +55,6 @@ const ukCitiesUrl = 'uk-cities.json';
 const ukCountiesUrl = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/GBR/ADM2/geoBoundaries-GBR-ADM2_simplified.geojson';
 const irelandCountiesUrl = 'ireland-counties.geojson';
 const countyRegions: CountyRegion[] = ['England', 'Wales', 'Scotland', 'Northern Ireland', 'Ireland'];
-const planetaryQuestions: PlanetQuizQuestion[] = [
-  { question: 'Which planet is farthest from the Sun?', options: ['Neptune', 'Uranus', 'Saturn', 'Jupiter'], answer: 'Neptune', fact: 'Neptune orbits about 4.5 billion kilometres from the Sun on average.' },
-  { question: 'Which planet is largest by diameter?', options: ['Jupiter', 'Saturn', 'Uranus', 'Neptune'], answer: 'Jupiter', fact: 'Jupiter is so large that more than 1,300 Earths could fit inside it by volume.' },
-  { question: 'Which is the smallest planet in our solar system?', options: ['Mercury', 'Mars', 'Venus', 'Earth'], answer: 'Mercury', fact: 'Mercury is only a little larger than Earth’s Moon.' },
-  { question: 'Which planet has the hottest average surface?', options: ['Venus', 'Mercury', 'Mars', 'Jupiter'], answer: 'Venus', fact: 'Venus’s thick carbon-dioxide atmosphere traps heat in an intense greenhouse effect.' },
-  { question: 'Which planet is nicknamed the Red Planet?', options: ['Mars', 'Mercury', 'Venus', 'Jupiter'], answer: 'Mars', fact: 'Iron minerals in Martian dust rust, giving the planet its familiar reddish colour.' },
-  { question: 'Which planet is famous for its broad, bright ring system?', options: ['Saturn', 'Jupiter', 'Uranus', 'Neptune'], answer: 'Saturn', fact: 'Saturn’s rings are made mostly of countless pieces of water ice, from tiny grains to boulders.' },
-  { question: 'Which planet rotates with its axis tipped almost onto its side?', options: ['Uranus', 'Neptune', 'Saturn', 'Jupiter'], answer: 'Uranus', fact: 'Uranus has an axial tilt of about 98 degrees, so it effectively rolls around the Sun.' },
-  { question: 'On which planet is one rotation longer than one trip around the Sun?', options: ['Venus', 'Mercury', 'Mars', 'Jupiter'], answer: 'Venus', fact: 'Venus takes about 243 Earth days to rotate once, but only about 225 Earth days to orbit the Sun.' },
-  { question: 'The Great Red Spot is a giant storm on which planet?', options: ['Jupiter', 'Neptune', 'Mars', 'Saturn'], answer: 'Jupiter', fact: 'The Great Red Spot is a long-lived storm system large enough to contain Earth.' },
-  { question: 'Olympus Mons, the tallest known volcano in the solar system, is on which planet?', options: ['Mars', 'Venus', 'Mercury', 'Earth'], answer: 'Mars', fact: 'Olympus Mons rises about 22 kilometres above the surrounding Martian plains.' },
-  { question: 'Which planet has a dense atmosphere made mostly of carbon dioxide?', options: ['Venus', 'Earth', 'Jupiter', 'Mercury'], answer: 'Venus', fact: 'Venus’s atmosphere is roughly 96% carbon dioxide, with clouds of sulfuric acid.' },
-  { question: 'Which planet is closest to the Sun?', options: ['Mercury', 'Venus', 'Earth', 'Mars'], answer: 'Mercury', fact: 'Mercury completes one orbit in just 88 Earth days.' },
-  { question: 'Which moon is the largest in the solar system?', options: ['Ganymede', 'Titan', 'Callisto', 'Earth’s Moon'], answer: 'Ganymede', fact: 'Jupiter’s moon Ganymede is larger than the planet Mercury.' },
-  { question: 'Which moon has lakes and seas of liquid methane on its surface?', options: ['Titan', 'Enceladus', 'Rhea', 'Iapetus'], answer: 'Titan', fact: 'Titan is Saturn’s largest moon and the only moon known to have stable lakes and seas on its surface, made of hydrocarbons.' },
-  { question: 'Europa, a moon with a likely ocean beneath its icy crust, orbits which planet?', options: ['Jupiter', 'Saturn', 'Uranus', 'Neptune'], answer: 'Jupiter', fact: 'Europa’s hidden ocean may contain more liquid water than all of Earth’s oceans combined.' },
-  { question: 'Which Jupiter moon is covered in active volcanoes?', options: ['Io', 'Europa', 'Ganymede', 'Callisto'], answer: 'Io', fact: 'Io is the most volcanically active world known, powered by strong tidal forces from Jupiter.' },
-  { question: 'Triton, which orbits Neptune backwards compared with Neptune’s rotation, is a moon of which planet?', options: ['Neptune', 'Uranus', 'Saturn', 'Jupiter'], answer: 'Neptune', fact: 'Triton’s unusual backwards orbit suggests Neptune may have captured it long ago.' },
-  { question: 'Phobos, the larger and closer of Mars’s two moons, orbits which planet?', options: ['Mars', 'Earth', 'Jupiter', 'Neptune'], answer: 'Mars', fact: 'Phobos is slowly spiralling inward and may eventually break apart or collide with Mars.' },
-  { question: 'Deimos, the smaller and more distant of Mars’s two moons, orbits which planet?', options: ['Mars', 'Earth', 'Saturn', 'Uranus'], answer: 'Mars', fact: 'Deimos is only about 12 kilometres across on average and has a heavily cratered surface.' },
-  { question: 'What is the name of Earth’s natural moon?', options: ['The Moon', 'Europa', 'Titan', 'Phobos'], answer: 'The Moon', fact: 'The Moon is moving about 3.8 centimetres farther from Earth each year.' },
-  { question: 'Which Saturn moon vents water-rich plumes into space from its south pole?', options: ['Enceladus', 'Titan', 'Rhea', 'Iapetus'], answer: 'Enceladus', fact: 'The plumes from Enceladus hint at a global ocean beneath its icy shell.' },
-  { question: 'Which large moon of Jupiter has an ancient surface covered in impact craters?', options: ['Callisto', 'Io', 'Europa', 'Ganymede'], answer: 'Callisto', fact: 'Callisto’s old, heavily cratered crust preserves a record of impacts from the early solar system.' },
-  { question: 'Which of these Uranian moons is known for dramatic cliffs and patchwork terrain?', options: ['Miranda', 'Ariel', 'Umbriel', 'Titania', 'Oberon'], answer: 'Miranda', fact: 'Miranda is one of Uranus’s five major moons and is only about 470 kilometres across.' },
-  { question: 'Which dwarf planet has a large moon named Charon?', options: ['Pluto', 'Ceres', 'Eris', 'Haumea'], answer: 'Pluto', fact: 'Charon is so large relative to Pluto that the pair orbit a point in space between them.' },
-  { question: 'Which planet has the shortest year, lasting just 88 Earth days?', options: ['Mercury', 'Venus', 'Earth', 'Mars'], answer: 'Mercury', fact: 'Mercury’s close orbit makes it the fastest planet to travel around the Sun.' },
-];
 const solarSystemOrbits: SolarSystemOrbit[] = [
   { name: 'Mercury', rx: 46, ry: 28, angle: -110, radius: 4, moons: 0 },
   { name: 'Venus', rx: 90, ry: 52, angle: -48, radius: 6, moons: 0 },
@@ -894,11 +867,69 @@ function WhereAmIGame({
   );
 }
 
-function PlanetaryQuiz() {
-  const [questions, setQuestions] = useState(() => shuffle(planetaryQuestions).map((question) => ({
-    ...question,
-    options: shuffle(question.options),
-  })));
+function SolarSystemDiagram() {
+  return (
+    <div className="solar-system-diagram">
+      <svg viewBox="0 0 900 440" role="img" aria-label="Unlabelled schematic of the Sun, eight planetary orbits, planets and selected moon positions; not to scale">
+        {[...solarSystemOrbits].reverse().map((orbit) => {
+          const radians = orbit.angle * Math.PI / 180;
+          const x = 450 + Math.cos(radians) * orbit.rx;
+          const y = 220 + Math.sin(radians) * orbit.ry;
+          return (
+            <g key={orbit.name}>
+              <ellipse className="solar-orbit-line" cx="450" cy="220" rx={orbit.rx} ry={orbit.ry} />
+              {orbit.rings && (
+                <>
+                  <ellipse className="solar-planet-ring" cx={x} cy={y} rx={orbit.radius * 1.9} ry={orbit.radius * 0.62} transform={`rotate(-18 ${x} ${y})`} />
+                  <ellipse className="solar-planet-ring" cx={x} cy={y} rx={orbit.radius * 1.45} ry={orbit.radius * 0.43} transform={`rotate(-18 ${x} ${y})`} />
+                </>
+              )}
+              {Array.from({ length: orbit.moons }, (_, index) => {
+                const angle = index * (Math.PI * 2 / orbit.moons) + orbit.angle;
+                const distance = orbit.radius + 9 + (index % 2) * 5;
+                return (
+                  <circle
+                    className="solar-moon-point"
+                    key={`${orbit.name}-moon-${index}`}
+                    cx={x + Math.cos(angle) * distance}
+                    cy={y + Math.sin(angle) * distance * 0.72}
+                    r="1.8"
+                  />
+                );
+              })}
+              <circle className={`solar-planet-point solar-planet-${orbit.name.toLowerCase()}`} cx={x} cy={y} r={orbit.radius} />
+              <ellipse className="solar-planet-latitude" cx={x} cy={y} rx={orbit.radius * 0.92} ry={orbit.radius * 0.34} />
+              <path className="solar-planet-longitude" d={`M${x} ${y - orbit.radius} C${x - orbit.radius * 0.48} ${y - orbit.radius * 0.35} ${x - orbit.radius * 0.48} ${y + orbit.radius * 0.35} ${x} ${y + orbit.radius} M${x} ${y - orbit.radius} C${x + orbit.radius * 0.48} ${y - orbit.radius * 0.35} ${x + orbit.radius * 0.48} ${y + orbit.radius * 0.35} ${x} ${y + orbit.radius}`} />
+            </g>
+          );
+        })}
+        <circle className="solar-sun-point" cx="450" cy="220" r="20" />
+        <path className="solar-sun-line" d="M450 192v-9m0 74v-9m-28-28h-9m74 0h-9m-48-20-7-7m52 52-7-7m0-38 7-7m-52 52 7-7" />
+      </svg>
+      <span className="solar-diagram-note">SCHEMATIC · NOT TO SCALE</span>
+    </div>
+  );
+}
+
+function RiverCourseDiagram() {
+  return (
+    <div className="solar-system-diagram river-course-diagram">
+      <svg viewBox="0 0 900 440" role="img" aria-label="Unlabelled schematic showing a river flowing from highlands through tributaries to a delta">
+        <path className="river-terrain-line" d="M0 128 115 42l84 82 96-94 121 132 93-90 95 83 105-107 86 91 105-70" />
+        <path className="river-course-line" d="M102 91c72 33 91 106 164 112s77-52 142-34 51 108 111 111 74-73 123-42 47 69 96 63" />
+        <path className="river-course-line river-tributary" d="M224 97c6 43 23 67 42 106M382 77c-3 31 4 58 26 92m-75 38c-32 31-54 43-94 47m333-29c39 11 67 21 91 55m-85-60c7 42 5 64-9 96" />
+        <path className="river-delta-line" d="M738 280 824 231m-83 57 99 5m-104 9 77 63m-85-66 16 81" />
+        <circle className="river-source-point" cx="102" cy="91" r="7" />
+        <circle className="river-mouth-point" cx="738" cy="280" r="9" />
+      </svg>
+      <span className="solar-diagram-note">SCHEMATIC · SOURCE TO MOUTH</span>
+    </div>
+  );
+}
+
+function TopicQuiz({ topic }: { topic: 'solar-system' | 'rivers' }) {
+  const isRivers = topic === 'rivers';
+  const [questions, setQuestions] = useState<TopicQuizQuestion[]>(() => isRivers ? createRiversRound() : createSolarSystemRound());
   const [questionIndex, setQuestionIndex] = useState(0);
   const [picked, setPicked] = useState('');
   const [score, setScore] = useState(0);
@@ -917,7 +948,7 @@ function PlanetaryQuiz() {
   }
 
   function restart() {
-    setQuestions(shuffle(planetaryQuestions).map((item) => ({ ...item, options: shuffle(item.options) })));
+    setQuestions(isRivers ? createRiversRound() : createSolarSystemRound());
     setQuestionIndex(0);
     setPicked('');
     setScore(0);
@@ -929,62 +960,24 @@ function PlanetaryQuiz() {
     <div className="planetary-quiz">
       <div className="planetary-heading">
         <div>
-          <span className="map-kicker">25-QUESTION CHALLENGE</span>
-          <span className="map-title">Planets &amp; moons</span>
+          <span className="map-kicker">{isRivers ? riverQuestionCount : solarSystemQuestionCount} QUESTIONS IN THE BANK</span>
+          <span className="map-title">{isRivers ? 'Rivers of the World' : 'The Solar System'}</span>
         </div>
         <span className="planetary-score">{score} correct · {currentQuestionNumber} / {questions.length}</span>
       </div>
-      <div className="solar-system-diagram">
-        <svg viewBox="0 0 900 440" role="img" aria-label="Unlabelled schematic of the Sun, eight planetary orbits, planets and selected moon positions; not to scale">
-          {[...solarSystemOrbits].reverse().map((orbit) => {
-            const radians = orbit.angle * Math.PI / 180;
-            const x = 450 + Math.cos(radians) * orbit.rx;
-            const y = 220 + Math.sin(radians) * orbit.ry;
-            return (
-              <g key={orbit.name}>
-                <ellipse className="solar-orbit-line" cx="450" cy="220" rx={orbit.rx} ry={orbit.ry} />
-                {orbit.rings && (
-                  <>
-                    <ellipse className="solar-planet-ring" cx={x} cy={y} rx={orbit.radius * 1.9} ry={orbit.radius * 0.62} transform={`rotate(-18 ${x} ${y})`} />
-                    <ellipse className="solar-planet-ring" cx={x} cy={y} rx={orbit.radius * 1.45} ry={orbit.radius * 0.43} transform={`rotate(-18 ${x} ${y})`} />
-                  </>
-                )}
-                {Array.from({ length: orbit.moons }, (_, index) => {
-                  const angle = index * (Math.PI * 2 / orbit.moons) + orbit.angle;
-                  const distance = orbit.radius + 9 + (index % 2) * 5;
-                  return (
-                    <circle
-                      className="solar-moon-point"
-                      key={`${orbit.name}-moon-${index}`}
-                      cx={x + Math.cos(angle) * distance}
-                      cy={y + Math.sin(angle) * distance * 0.72}
-                      r="1.8"
-                    />
-                  );
-                })}
-                <circle className={`solar-planet-point solar-planet-${orbit.name.toLowerCase()}`} cx={x} cy={y} r={orbit.radius} />
-                <ellipse className="solar-planet-latitude" cx={x} cy={y} rx={orbit.radius * 0.92} ry={orbit.radius * 0.34} />
-                <path className="solar-planet-longitude" d={`M${x} ${y - orbit.radius} C${x - orbit.radius * 0.48} ${y - orbit.radius * 0.35} ${x - orbit.radius * 0.48} ${y + orbit.radius * 0.35} ${x} ${y + orbit.radius} M${x} ${y - orbit.radius} C${x + orbit.radius * 0.48} ${y - orbit.radius * 0.35} ${x + orbit.radius * 0.48} ${y + orbit.radius * 0.35} ${x} ${y + orbit.radius}`} />
-              </g>
-            );
-          })}
-          <circle className="solar-sun-point" cx="450" cy="220" r="20" />
-          <path className="solar-sun-line" d="M450 192v-9m0 74v-9m-28-28h-9m74 0h-9m-48-20-7-7m52 52-7-7m0-38 7-7m-52 52 7-7" />
-        </svg>
-        <span className="solar-diagram-note">SCHEMATIC · NOT TO SCALE</span>
-      </div>
+      {isRivers ? <RiverCourseDiagram /> : <SolarSystemDiagram />}
       <div className="planetary-question" aria-live="polite">
         {finished ? (
           <div className="planetary-complete">
             <span className="map-kicker">ROUND COMPLETE</span>
             <h2>You scored {score} out of {questions.length}</h2>
-            <p>Start a new round to reshuffle all 25 questions.</p>
+            <p>Start another round to draw 25 fresh clues from the question bank.</p>
             <button className="matchup-start-button" onClick={restart}>Play again</button>
           </div>
         ) : (
           <>
             <div className="planetary-progress">
-              <span className="map-kicker">QUESTION {currentQuestionNumber} OF {questions.length}</span>
+              <span className="map-kicker">25-QUESTION ROUND · QUESTION {currentQuestionNumber} OF {questions.length}</span>
               <div className="planetary-progress-track"><i style={{ width: `${(currentQuestionNumber / questions.length) * 100}%` }} /></div>
               <h2>{question.question}</h2>
             </div>
@@ -1203,7 +1196,7 @@ function App() {
   const countdown = useRef<number | undefined>(undefined);
 
   const currentQuestion = quizMode === 'twenty' ? sessionQuestions[questionIndex] : undefined;
-  const questionMode: QuestionMode = currentQuestion?.mode ?? (quizMode === 'twenty' || quizMode === 'matchup' || quizMode === 'counties' || quizMode === 'whereami' || quizMode === 'planets' ? 'name' : quizMode);
+  const questionMode: QuestionMode = currentQuestion?.mode ?? (quizMode === 'twenty' || quizMode === 'matchup' || quizMode === 'counties' || quizMode === 'whereami' || quizMode === 'planets' || quizMode === 'rivers' ? 'name' : quizMode);
   const activeContinent = currentQuestion?.continent ?? continent;
   const activeCountries = useMemo(
     () => activeContinent === 'World' ? countries : countries.filter((country) => country.properties.CONTINENT === activeContinent),
@@ -1428,24 +1421,24 @@ function App() {
       </header>
 
       <div className="workspace">
-        <aside className={`quiz-panel${questionMode === 'outline' ? ' outline-quiz-panel' : ''}${quizMode === 'twenty' ? ' challenge-quiz-panel' : ''}${quizMode === 'matchup' ? ' matchup-quiz-panel' : ''}${quizMode === 'counties' ? ' counties-quiz-panel' : ''}${quizMode === 'whereami' ? ' whereami-quiz-panel' : ''}${quizMode === 'planets' ? ' planetary-quiz-panel' : ''}`}>
-          <div className="eyebrow"><span>01</span> &nbsp;COUNTRY STUDY</div>
+        <aside className={`quiz-panel${questionMode === 'outline' ? ' outline-quiz-panel' : ''}${quizMode === 'twenty' ? ' challenge-quiz-panel' : ''}${quizMode === 'matchup' ? ' matchup-quiz-panel' : ''}${quizMode === 'counties' ? ' counties-quiz-panel' : ''}${quizMode === 'whereami' ? ' whereami-quiz-panel' : ''}${quizMode === 'planets' || quizMode === 'rivers' ? ' planetary-quiz-panel' : ''}`}>
+          <div className="eyebrow"><span>01</span> &nbsp;{quizMode === 'planets' || quizMode === 'rivers' ? 'TOPIC QUIZ' : 'COUNTRY STUDY'}</div>
           <div className="question-block" aria-live="polite">
             <div className="question-label">
-              {quizMode === 'counties' ? 'COUNTY QUIZ' : quizMode === 'whereami' ? 'WHERE AM I?' : quizMode === 'planets' ? 'PLANET & MOON QUIZ' : quizMode === 'matchup' ? 'MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
+              {quizMode === 'counties' ? 'COUNTY QUIZ' : quizMode === 'whereami' ? 'WHERE AM I?' : quizMode === 'planets' ? 'THE SOLAR SYSTEM' : quizMode === 'rivers' ? 'WORLD RIVERS' : quizMode === 'matchup' ? 'MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
             </div>
             {quizMode === 'twenty' && <div className="challenge-progress">QUESTION {Math.min(questionIndex + 1, 20)} / 20 <span>{activeContinent.toUpperCase()}</span></div>}
-            <h1>{quizMode === 'counties' ? 'Explore the counties' : quizMode === 'whereami' ? 'Trace the distances' : quizMode === 'planets' ? '25 questions' : quizMode === 'matchup' ? matchupFinished ? 'All matched!' : 'Match the clues' : loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
+            <h1>{quizMode === 'counties' ? 'Explore the counties' : quizMode === 'whereami' ? 'Trace the distances' : quizMode === 'planets' || quizMode === 'rivers' ? '25 questions' : quizMode === 'matchup' ? matchupFinished ? 'All matched!' : 'Match the clues' : loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
             {questionMode === 'flag' && targetMetadata?.cca2 && <img className="flag-clue" src={`https://flagcdn.com/w320/${targetMetadata.cca2.toLowerCase()}.png`} alt="Flag clue" />}
-            <p className="instruction">{quizMode === 'counties' ? 'Select the county named on the map.' : quizMode === 'whereami' ? 'Match a UK place to its geodesic distances from three others.' : quizMode === 'planets' ? 'Answer a shuffled round about the planets, moons, and their remarkable features.' : quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all five clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
+            <p className="instruction">{quizMode === 'counties' ? 'Select the county named on the map.' : quizMode === 'whereami' ? 'Match a UK place to its geodesic distances from three others.' : quizMode === 'planets' ? 'Explore the planets, moons, and their remarkable features.' : quizMode === 'rivers' ? 'Explore great rivers, their routes, cities, and destinations.' : quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all five clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues are unavailable right now.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
           </div>
 
           <section className="quiz-settings" aria-label="Quiz options">
             <div className="section-heading"><span>CLUE TYPE</span></div>
             <div className="mode-options" role="group" aria-label="Choose a quiz clue">
-              {(['name', 'flag', 'capital', 'outline', 'twenty', 'matchup', 'counties', 'whereami', 'planets'] as const).map((mode) => (
+              {(['name', 'flag', 'capital', 'outline', 'twenty', 'matchup', 'counties', 'whereami', 'planets', 'rivers'] as const).map((mode) => (
                 <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => changeMode(mode)} aria-pressed={quizMode === mode} disabled={((mode === 'flag' || mode === 'capital') && (metadataLoading || metadataError)) || ((mode === 'twenty' || mode === 'matchup') && (loading || metadataLoading || metadataError))}>
-                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : mode === 'twenty' ? '20 Questions' : mode === 'matchup' ? 'Matchup' : mode === 'counties' ? 'UK Counties' : mode === 'whereami' ? 'Where am I?' : 'Planets & Moons'}
+                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : mode === 'twenty' ? '20 Questions' : mode === 'matchup' ? 'Matchup' : mode === 'counties' ? 'UK Counties' : mode === 'whereami' ? 'Where am I?' : mode === 'planets' ? 'The Solar System' : 'Rivers of the World'}
                 </button>
               ))}
             </div>
@@ -1469,7 +1462,7 @@ function App() {
                 </div>
               </section>
             )}
-            {quizMode !== 'matchup' && quizMode !== 'planets' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />{quizMode === 'counties' ? 'Show county names on hover' : quizMode === 'whereami' ? 'Show place names on hover' : 'Show country name on hover'}</label>}
+            {quizMode !== 'matchup' && quizMode !== 'planets' && quizMode !== 'rivers' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />{quizMode === 'counties' ? 'Show county names on hover' : quizMode === 'whereami' ? 'Show place names on hover' : 'Show country name on hover'}</label>}
             {quizMode === 'whereami' && <label className="hover-toggle"><input type="checkbox" checked={highlightDistancePlaces} onChange={(event) => setHighlightDistancePlaces(event.target.checked)} />Highlight clue cities and distances</label>}
             {metadataError && <p className="metadata-note">Flag and capital clues are unavailable right now.</p>}
             {matchupError && <p className="metadata-note" role="alert">{matchupError}</p>}
@@ -1488,7 +1481,7 @@ function App() {
             </section>
           )}
 
-          {quizMode !== 'matchup' && quizMode !== 'counties' && quizMode !== 'whereami' && quizMode !== 'planets' && <section className="region-section" aria-labelledby="region-title">
+          {quizMode !== 'matchup' && quizMode !== 'counties' && quizMode !== 'whereami' && quizMode !== 'planets' && quizMode !== 'rivers' && <section className="region-section" aria-labelledby="region-title">
             <div className="section-heading"><span id="region-title">{quizMode === 'twenty' ? 'REGION · AUTO' : 'REGION'}</span><span className="region-count">{String(continents.indexOf(activeContinent) + 1).padStart(2, '0')} / 08</span></div>
             <div className="region-grid" role="group" aria-label="Choose a region">
               {continents.map((region) => (
@@ -1499,7 +1492,7 @@ function App() {
             </div>
           </section>}
 
-          {quizMode !== 'counties' && quizMode !== 'whereami' && quizMode !== 'planets' && <section className="score-section" aria-label="Quiz score">
+          {quizMode !== 'counties' && quizMode !== 'whereami' && quizMode !== 'planets' && quizMode !== 'rivers' && <section className="score-section" aria-label="Quiz score">
             <div className="section-heading"><span>{quizMode === 'matchup' ? 'MATCHED ROWS' : 'SESSION SCORE'}</span>{quizMode !== 'matchup' && <button className="icon-button reset-button" onClick={resetScore} title="Reset score" aria-label="Reset score"><RotateCcw size={15} /></button>}</div>
             <div className="score-row"><strong>{quizMode === 'matchup' ? correctMatchupRows : score}<span> / {quizMode === 'matchup' ? 10 : total}</span></strong>{quizMode === 'matchup' ? <span className="accuracy">ROWS</span> : <span className="accuracy">{accuracy}%<small> ACCURACY</small></span>}</div>
             <div className="score-track" aria-hidden="true"><span style={{ width: `${quizMode === 'matchup' ? correctMatchupRows * 10 : accuracy}%` }} /></div>
@@ -1508,11 +1501,11 @@ function App() {
           <div className="panel-footer"><Crosshair size={15} /><span>Every answer is a new bearing.</span></div>
         </aside>
 
-        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}${quizMode === 'counties' ? ' county-map-section' : ''}${quizMode === 'whereami' ? ' whereami-section' : ''}${quizMode === 'planets' ? ' planetary-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Matchup game' : quizMode === 'counties' ? 'County quiz' : quizMode === 'whereami' ? 'Where am I UK distance quiz' : quizMode === 'planets' ? 'Planets and moons quiz' : 'Interactive world map'}>
+        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}${quizMode === 'counties' ? ' county-map-section' : ''}${quizMode === 'whereami' ? ' whereami-section' : ''}${quizMode === 'planets' || quizMode === 'rivers' ? ' planetary-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Matchup game' : quizMode === 'counties' ? 'County quiz' : quizMode === 'whereami' ? 'Where am I UK distance quiz' : quizMode === 'planets' ? 'The Solar System quiz' : quizMode === 'rivers' ? 'Rivers of the World quiz' : 'Interactive world map'}>
           {quizMode === 'counties' ? (
             <CountyQuiz selectedRegions={selectedCountyRegions} showHoverName={showHoverName} />
-          ) : quizMode === 'planets' ? (
-            <PlanetaryQuiz />
+          ) : quizMode === 'planets' || quizMode === 'rivers' ? (
+            <TopicQuiz key={quizMode} topic={quizMode === 'rivers' ? 'rivers' : 'solar-system'} />
           ) : quizMode === 'whereami' ? (
             <WhereAmIGame countries={countries} loading={loading} loadError={loadError} showHoverName={showHoverName} highlightDistancePlaces={highlightDistancePlaces} />
           ) : quizMode === 'matchup' ? (

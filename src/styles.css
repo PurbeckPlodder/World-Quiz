@@ -204,6 +204,12 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .solar-sun-point { fill: #e3ae58; stroke: #c58a38; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
 .solar-sun-line { fill: none; stroke: #c58a38; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
 .solar-diagram-note { position: absolute; right: 9px; bottom: 7px; color: #63776c; font-family: var(--mono); font-size: 8px; letter-spacing: .06em; }
+.river-terrain-line { fill: none; stroke: #8e9c90; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.river-course-line { fill: none; stroke: #4f9dbe; stroke-width: 6; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.river-course-line.river-tributary { stroke-width: 3; }
+.river-delta-line { fill: none; stroke: #4f9dbe; stroke-width: 2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.river-source-point { fill: #759c68; stroke: #e4ece8; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.river-mouth-point { fill: #4f9dbe; stroke: #e4ece8; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .planetary-question { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px; background: #e7ebe2; border: 1px solid var(--line); }
 .planetary-progress-track { height: 3px; margin: 6px 0 11px; background: #d2dcd4; }
 .planetary-progress-track i { display: block; height: 100%; background: var(--accent); transition: width .2s ease; }
