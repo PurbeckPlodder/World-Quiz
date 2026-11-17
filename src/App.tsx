@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { geoNaturalEarth1, geoPath, geoGraticule10 } from 'd3-geo';
+import { geoMercator, geoNaturalEarth1, geoPath, geoGraticule10 } from 'd3-geo';
 import { select } from 'd3-selection';
 import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom';
 import { Crosshair, Globe2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
@@ -15,9 +15,11 @@ type CountryProperties = {
 };
 
 type Country = Feature<Geometry, CountryProperties>;
+type CountyProperties = { shapeName: string; shapeID?: string };
+type CountyFeature = Feature<Geometry, CountyProperties>;
 type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
 type QuestionMode = 'name' | 'flag' | 'capital' | 'outline';
-type QuizMode = QuestionMode | 'twenty' | 'matchup';
+type QuizMode = QuestionMode | 'twenty' | 'matchup' | 'counties';
 const twentyQuestionDurationSeconds = 5 * 60;
 const matchupColumns = ['country', 'capital', 'flag', 'outline', 'population'] as const;
 type MatchupColumn = typeof matchupColumns[number];
@@ -36,6 +38,7 @@ const matchupColumnLabels: Record<MatchupColumn, string> = {
   population: 'POPULATION',
 };
 const countriesUrl = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson';
+const ukCountiesUrl = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/GBR/ADM2/geoBoundaries-GBR-ADM2_simplified.geojson';
 
 function shuffle<T>(items: T[]) {
   const shuffledItems = [...items];
@@ -123,6 +126,137 @@ function countCorrectMatchupRows(board: MatchupBoard) {
 
 function formatElapsedTime(seconds: number) {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function CountyQuiz() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const [counties, setCounties] = useState<CountyFeature[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [target, setTarget] = useState('');
+  const [picked, setPicked] = useState('');
+  const [hoveredName, setHoveredName] = useState('');
+  const [score, setScore] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(ukCountiesUrl, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error('UK county boundary request failed');
+        return response.json() as Promise<FeatureCollection<Geometry, CountyProperties>>;
+      })
+      .then((collection) => {
+        const features = collection.features.filter((feature): feature is CountyFeature => Boolean(feature.properties?.shapeName));
+        if (!features.length) throw new Error('UK county boundary data is empty');
+        setCounties(features);
+        setTarget(features[Math.floor(Math.random() * features.length)].properties.shapeName);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setLoadError(true);
+      })
+      .finally(() => setLoading(false));
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(([entry]) => setSize({ width: entry.contentRect.width, height: entry.contentRect.height }));
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  const path = useMemo(() => {
+    if (!size.width || !size.height || !counties.length) return null;
+    const projection = geoMercator().fitExtent(
+      [[24, 24], [size.width - 24, size.height - 24]],
+      { type: 'FeatureCollection', features: counties },
+    );
+    return geoPath(projection);
+  }, [counties, size]);
+
+  function answer(county: CountyFeature) {
+    if (picked || !target) return;
+    const answerName = county.properties.shapeName;
+    setPicked(answerName);
+    setHoveredName('');
+    setTotal((value) => value + 1);
+    if (answerName === target) setScore((value) => value + 1);
+    timer.current = window.setTimeout(() => {
+      setTarget((currentTarget) => {
+        const options = counties.filter((feature) => feature.properties.shapeName !== currentTarget);
+        return options[Math.floor(Math.random() * options.length)]?.properties.shapeName ?? currentTarget;
+      });
+      setPicked('');
+    }, 750);
+  }
+
+  function resetScore() {
+    window.clearTimeout(timer.current);
+    setScore(0);
+    setTotal(0);
+    setPicked('');
+    setTarget(counties[Math.floor(Math.random() * counties.length)]?.properties.shapeName ?? '');
+  }
+
+  const accuracy = total ? Math.round((score / total) * 100) : 0;
+
+  return (
+    <div className="county-quiz">
+      <div className="map-heading">
+        <div><span className="map-kicker">ENGLAND · SCOTLAND · WALES · NORTHERN IRELAND</span><span className="map-title">United Kingdom counties</span></div>
+        <button className="icon-button reset-button" onClick={resetScore} title="Reset county score" aria-label="Reset county score"><RotateCcw size={15} /></button>
+      </div>
+      <div className="county-question" aria-live="polite">
+        <span className="map-kicker">FIND THIS COUNTY OR LOCAL AREA</span>
+        <h2>{loading ? 'Loading county boundaries…' : loadError ? 'County map unavailable' : target || 'Preparing the map'}</h2>
+        <span className="county-score">{score} / {total} correct · {accuracy}% accuracy</span>
+      </div>
+      <div className="map-canvas county-map-canvas" ref={containerRef}>
+        <svg className="world-map" aria-label="Interactive map of United Kingdom counties and local areas">
+          {path && counties.map((county, index) => {
+            const name = county.properties.shapeName;
+            const isPicked = name === picked;
+            const status = isPicked ? (picked === target ? 'correct' : 'wrong') : picked && name === target ? 'answer' : '';
+            return (
+              <path
+                key={county.properties.shapeID ?? `${name}-${index}`}
+                d={path(county) ?? undefined}
+                className={`country-shape county-shape${status ? ` ${status}` : ''}${picked ? ' locked' : ''}`}
+                role="button"
+                tabIndex={picked ? -1 : 0}
+                aria-label={name}
+                aria-disabled={Boolean(picked)}
+                onMouseEnter={() => { if (!picked) setHoveredName(name); }}
+                onMouseLeave={() => setHoveredName('')}
+                onFocus={() => { if (!picked) setHoveredName(name); }}
+                onBlur={() => setHoveredName('')}
+                onClick={() => answer(county)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    answer(county);
+                  }
+                }}
+              />
+            );
+          })}
+        </svg>
+        {hoveredName && !picked && <div className="country-hover-label" role="status">{hoveredName}</div>}
+        {(loading || loadError) && <div className="map-message" role={loadError ? 'alert' : 'status'}>{loadError ? 'Could not load UK county boundaries. Please try again later.' : 'Loading county boundaries…'}</div>}
+        <div className="map-stamp">ATLAS<br /><span>UK LOCAL AREAS</span></div>
+      </div>
+      <div className="map-caption"><span><i className="legend-dot" />SELECT A COUNTY ON THE MAP</span><span>BOUNDARIES: GEOBOUNDARIES / OGL 3.0</span></div>
+    </div>
+  );
 }
 
 function MatchupTileButton({
@@ -306,7 +440,7 @@ function App() {
   const countdown = useRef<number | undefined>(undefined);
 
   const currentQuestion = quizMode === 'twenty' ? sessionQuestions[questionIndex] : undefined;
-  const questionMode: QuestionMode = currentQuestion?.mode ?? (quizMode === 'twenty' || quizMode === 'matchup' ? 'name' : quizMode);
+  const questionMode: QuestionMode = currentQuestion?.mode ?? (quizMode === 'twenty' || quizMode === 'matchup' || quizMode === 'counties' ? 'name' : quizMode);
   const activeContinent = currentQuestion?.continent ?? continent;
   const activeCountries = useMemo(
     () => activeContinent === 'World' ? countries : countries.filter((country) => country.properties.CONTINENT === activeContinent),
@@ -531,28 +665,28 @@ function App() {
       </header>
 
       <div className="workspace">
-        <aside className={`quiz-panel${questionMode === 'outline' ? ' outline-quiz-panel' : ''}${quizMode === 'twenty' ? ' challenge-quiz-panel' : ''}${quizMode === 'matchup' ? ' matchup-quiz-panel' : ''}`}>
+        <aside className={`quiz-panel${questionMode === 'outline' ? ' outline-quiz-panel' : ''}${quizMode === 'twenty' ? ' challenge-quiz-panel' : ''}${quizMode === 'matchup' ? ' matchup-quiz-panel' : ''}${quizMode === 'counties' ? ' counties-quiz-panel' : ''}`}>
           <div className="eyebrow"><span>01</span> &nbsp;COUNTRY STUDY</div>
           <div className="question-block" aria-live="polite">
             <div className="question-label">
-              {quizMode === 'matchup' ? 'MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
+              {quizMode === 'counties' ? 'UK COUNTIES' : quizMode === 'matchup' ? 'MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
             </div>
             {quizMode === 'twenty' && <div className="challenge-progress">QUESTION {Math.min(questionIndex + 1, 20)} / 20 <span>{activeContinent.toUpperCase()}</span></div>}
-            <h1>{quizMode === 'matchup' ? matchupFinished ? 'All matched!' : 'Match the clues' : loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
+            <h1>{quizMode === 'counties' ? 'Explore the counties' : quizMode === 'matchup' ? matchupFinished ? 'All matched!' : 'Match the clues' : loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
             {questionMode === 'flag' && targetMetadata?.cca2 && <img className="flag-clue" src={`https://flagcdn.com/w320/${targetMetadata.cca2.toLowerCase()}.png`} alt="Flag clue" />}
-            <p className="instruction">{quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all five clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
+            <p className="instruction">{quizMode === 'counties' ? 'Select the county or local area named on the map.' : quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all five clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues could not be loaded.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
           </div>
 
           <section className="quiz-settings" aria-label="Quiz options">
             <div className="section-heading"><span>CLUE TYPE</span></div>
             <div className="mode-options" role="group" aria-label="Choose a quiz clue">
-              {(['name', 'flag', 'capital', 'outline', 'twenty', 'matchup'] as const).map((mode) => (
+              {(['name', 'flag', 'capital', 'outline', 'twenty', 'matchup', 'counties'] as const).map((mode) => (
                 <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => changeMode(mode)} aria-pressed={quizMode === mode} disabled={((mode === 'flag' || mode === 'capital') && (metadataLoading || metadataError)) || ((mode === 'twenty' || mode === 'matchup') && (loading || metadataLoading || metadataError))}>
-                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : mode === 'twenty' ? '20 Questions' : 'Matchup'}
+                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : mode === 'twenty' ? '20 Questions' : mode === 'matchup' ? 'Matchup' : 'UK Counties'}
                 </button>
               ))}
             </div>
-            {quizMode !== 'matchup' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />Show country name on hover</label>}
+            {quizMode !== 'matchup' && quizMode !== 'counties' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />Show country name on hover</label>}
             {metadataError && <p className="metadata-note">Flag and capital clues are unavailable right now.</p>}
             {matchupError && <p className="metadata-note" role="alert">{matchupError}</p>}
           </section>
@@ -570,7 +704,7 @@ function App() {
             </section>
           )}
 
-          {quizMode !== 'matchup' && <section className="region-section" aria-labelledby="region-title">
+          {quizMode !== 'matchup' && quizMode !== 'counties' && <section className="region-section" aria-labelledby="region-title">
             <div className="section-heading"><span id="region-title">{quizMode === 'twenty' ? 'REGION · AUTO' : 'REGION'}</span><span className="region-count">{String(continents.indexOf(activeContinent) + 1).padStart(2, '0')} / 08</span></div>
             <div className="region-grid" role="group" aria-label="Choose a region">
               {continents.map((region) => (
@@ -581,17 +715,19 @@ function App() {
             </div>
           </section>}
 
-          <section className="score-section" aria-label="Quiz score">
+          {quizMode !== 'counties' && <section className="score-section" aria-label="Quiz score">
             <div className="section-heading"><span>{quizMode === 'matchup' ? 'MATCHED ROWS' : 'SESSION SCORE'}</span>{quizMode !== 'matchup' && <button className="icon-button reset-button" onClick={resetScore} title="Reset score" aria-label="Reset score"><RotateCcw size={15} /></button>}</div>
             <div className="score-row"><strong>{quizMode === 'matchup' ? correctMatchupRows : score}<span> / {quizMode === 'matchup' ? 10 : total}</span></strong>{quizMode === 'matchup' ? <span className="accuracy">ROWS</span> : <span className="accuracy">{accuracy}%<small> ACCURACY</small></span>}</div>
             <div className="score-track" aria-hidden="true"><span style={{ width: `${quizMode === 'matchup' ? correctMatchupRows * 10 : accuracy}%` }} /></div>
-          </section>
+          </section>}
 
           <div className="panel-footer"><Crosshair size={15} /><span>Every answer is a new bearing.</span></div>
         </aside>
 
-        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Matchup game' : 'Interactive world map'}>
-          {quizMode === 'matchup' ? (
+        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}${quizMode === 'counties' ? ' county-map-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Matchup game' : quizMode === 'counties' ? 'United Kingdom counties quiz' : 'Interactive world map'}>
+          {quizMode === 'counties' ? (
+            <CountyQuiz />
+          ) : quizMode === 'matchup' ? (
             <MatchupGame
               tiles={matchupTiles}
               board={matchupBoard}

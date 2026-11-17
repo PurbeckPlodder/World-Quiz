@@ -56,10 +56,10 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .matchup-quiz-panel .quiz-settings { padding: 10px 0 12px; }
 .flag-clue { display: block; max-width: min(170px, 100%); max-height: 76px; margin-top: 15px; object-fit: contain; object-position: left center; }
 .quiz-settings { padding: 16px 0 17px; border-top: 1px solid var(--line); }
-.mode-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 11px; border: 1px solid var(--line); }
+.mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 11px; border: 1px solid var(--line); }
 .mode-option { min-width: 0; height: 38px; padding: 3px 2px; background: transparent; border: 0; border-right: 1px solid var(--line); color: #52615a; font-size: 10px; line-height: 1.15; cursor: pointer; }
-.mode-option:nth-child(3n) { border-right: 0; }
-.mode-option:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
+.mode-option:nth-child(2n) { border-right: 0; }
+.mode-option:not(:nth-last-child(-n+2)) { border-bottom: 1px solid var(--line); }
 .mode-option:hover:not(:disabled) { background: #e8e8de; color: var(--ink); }
 .mode-option.selected { background: var(--ink); color: var(--paper); }
 .mode-option:disabled { color: #a0a69e; cursor: not-allowed; }
@@ -127,6 +127,23 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .legend-dot { display: inline-block; height: 7px; width: 7px; background: var(--accent); border-radius: 50%; }
 
 .matchup-section { min-height: 0; }
+.county-quiz { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.county-quiz .map-heading { flex: 0 0 auto; align-items: center; padding-bottom: 12px; }
+.county-quiz .map-heading > div:first-child { gap: 5px; }
+.county-quiz .map-title { font-size: 25px; }
+.county-question { flex: 0 0 auto; padding: 13px 15px; background: #e7ebe2; border: 1px solid var(--line); }
+.county-question h2 { margin: 5px 0; color: var(--accent); font-family: 'Fraunces', serif; font-size: clamp(24px, 3vw, 36px); font-weight: 500; }
+.county-score { color: #65736b; font-family: var(--mono); font-size: 10px; }
+.county-map-canvas { flex: 1; min-height: 0; margin-top: 12px; }
+.county-shape { fill: #f5f3e9; stroke: #758b7e; stroke-width: .8; cursor: pointer; transition: fill .12s ease; }
+.county-shape:hover { fill: #e9b08e; }
+.county-shape.correct, .county-shape.answer { fill: #73a985; }
+.county-shape.wrong { fill: #d47a61; }
+.county-shape.locked { cursor: default; }
+.county-map-section .map-caption { align-items: center; gap: 8px; font-size: 8px; }
+.county-map-section .map-caption span:last-child { text-align: right; }
+.counties-quiz-panel .question-block { margin: 26px 0; }
+.counties-quiz-panel .quiz-settings { padding: 10px 0 12px; }
 .matchup-game { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .matchup-game-heading, .matchup-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .matchup-game-heading { padding: 0 2px 12px; }
@@ -184,6 +201,8 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
   .matchup-game-heading h2 { font-size: 23px; }
   .matchup-toolbar { align-items: flex-start; }
   .matchup-board { min-width: 720px; }
+  .county-map-section { min-height: 75vh; }
+  .county-map-section .map-caption { flex-wrap: wrap; }
 }
 
 @media (prefers-reduced-motion: reduce) {
