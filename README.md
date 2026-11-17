@@ -2,7 +2,7 @@
 
 A responsive country-identification quiz built with React, TypeScript, Vite, and D3. Country borders are provided by Natural Earth at 1:50m resolution.
 
-Quiz clues include country name, flag, capital, and a single-country outline. Outline mode offers eight country choices. UK Counties asks players to locate county and local-authority areas across England, Scotland, Wales, and Northern Ireland. The 20 Questions mode runs 5 questions in each clue type against four randomly selected regions, with 5 minutes to complete the round. Matchup is a timed drag-and-drop puzzle: arrange ten countries' names, capitals, flags, outlines, and populations into matching rows. Restarting deals a fresh set of countries.
+Quiz clues include country name, flag, capital, and a single-country outline. Outline mode offers eight country choices. UK Counties asks players to locate only the county names in the supplied England, Scotland, Wales, and Northern Ireland lists. Current local-area boundaries are grouped to represent those names; historical and overlapping county boundaries are approximate. The county map supports zooming and panning. The 20 Questions mode runs 5 questions in each clue type against four randomly selected regions, with 5 minutes to complete the round. Matchup is a timed drag-and-drop puzzle: arrange ten countries' names, capitals, flags, outlines, and populations into matching rows. Restarting deals a fresh set of countries.
 
 ## Run locally
 

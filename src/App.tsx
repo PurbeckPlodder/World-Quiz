@@ -148,6 +148,130 @@ function correctCountyWinding(feature: CountyFeature): CountyFeature {
   return feature;
 }
 
+const COUNTY_AREA_GROUPS: Record<string, string> = {
+  Bedfordshire: 'Bedford|Central Bedfordshire|Luton',
+  Berkshire: 'Bracknell Forest|Reading|Slough|West Berkshire|Windsor and Maidenhead|Wokingham',
+  Bristol: 'Bristol, City of',
+  Buckinghamshire: 'Buckinghamshire|Milton Keynes',
+  Cambridgeshire: 'Cambridgeshire|Peterborough',
+  Cheshire: 'Cheshire East|Cheshire West and Chester|Halton|Warrington',
+  'City of London': 'City of London',
+  Cornwall: 'Cornwall|Isles of Scilly',
+  'County Durham': 'County Durham|Darlington|Hartlepool|Middlesbrough|Redcar and Cleveland|Stockton-on-Tees',
+  Cumbria: 'Cumbria',
+  Derbyshire: 'Derby|Derbyshire',
+  Devon: 'Devon|Plymouth|Torbay',
+  Dorset: 'Bournemouth, Christchurch and Poole|Dorset',
+  'East Riding of Yorkshire': 'East Riding of Yorkshire|Kingston upon Hull, City of',
+  'East Sussex': 'Brighton and Hove|East Sussex',
+  Essex: 'Essex|Southend-on-Sea|Thurrock',
+  Gloucestershire: 'Gloucestershire',
+  'Greater London': 'Barking and Dagenham|Barnet|Bexley|Brent|Bromley|Camden|Croydon|Ealing|Enfield|Greenwich|Hackney|Hammersmith and Fulham|Haringey|Harrow|Havering|Hillingdon|Hounslow|Islington|Kensington and Chelsea|Kingston upon Thames|Lambeth|Lewisham|Merton|Newham|Redbridge|Richmond upon Thames|Southwark|Sutton|Tower Hamlets|Waltham Forest|Wandsworth|Westminster',
+  'Greater Manchester': 'Bolton|Bury|Manchester|Oldham|Rochdale|Salford|Stockport|Tameside|Trafford|Wigan',
+  Hampshire: 'Hampshire|Portsmouth|Southampton',
+  Herefordshire: 'Herefordshire, County of',
+  Hertfordshire: 'Hertfordshire',
+  'Isle of Wight': 'Isle of Wight',
+  Kent: 'Kent|Medway',
+  Lancashire: 'Blackburn with Darwen|Blackpool|Lancashire',
+  Leicestershire: 'Leicester|Leicestershire',
+  Lincolnshire: 'Lincolnshire|North East Lincolnshire|North Lincolnshire',
+  Merseyside: 'Knowsley|Liverpool|Sefton|St. Helens|Wirral',
+  Norfolk: 'Norfolk',
+  'North Somerset': 'North Somerset',
+  'North Yorkshire': 'North Yorkshire|York',
+  Northamptonshire: 'Northamptonshire',
+  Northumberland: 'Northumberland',
+  Nottinghamshire: 'Nottingham|Nottinghamshire',
+  Oxfordshire: 'Oxfordshire',
+  Rutland: 'Rutland',
+  Shropshire: 'Shropshire|Telford and Wrekin',
+  Somerset: 'Bath and North East Somerset|Somerset',
+  'South Gloucestershire': 'South Gloucestershire',
+  'South Yorkshire': 'Barnsley|Doncaster|Rotherham|Sheffield',
+  Staffordshire: 'Staffordshire|Stoke-on-Trent',
+  Suffolk: 'Suffolk',
+  Surrey: 'Surrey',
+  'Tyne & Wear': 'Gateshead|Newcastle upon Tyne|North Tyneside|South Tyneside|Sunderland',
+  Warwickshire: 'Warwickshire',
+  'West Midlands': 'Birmingham|Coventry|Dudley|Sandwell|Solihull|Walsall|Wolverhampton',
+  'West Sussex': 'West Sussex',
+  'West Yorkshire': 'Bradford|Calderdale|Kirklees|Leeds|Wakefield',
+  Wiltshire: 'Swindon|Wiltshire',
+  Worcestershire: 'Worcestershire',
+  Aberdeenshire: 'Aberdeen City|Aberdeenshire',
+  Angus: 'Angus|Dundee City',
+  'Argyll & Bute': 'Argyll and Bute',
+  Ayrshire: 'East Ayrshire|North Ayrshire|South Ayrshire',
+  Banffshire: 'Aberdeenshire|Moray',
+  Berwickshire: 'Scottish Borders',
+  Caithness: 'Highland',
+  Clackmannanshire: 'Clackmannanshire',
+  'Dumfries & Galloway': 'Dumfries and Galloway',
+  'East Ayrshire': 'East Ayrshire',
+  'East Dunbartonshire': 'East Dunbartonshire',
+  'East Lothian': 'East Lothian',
+  'East Renfrewshire': 'East Renfrewshire',
+  Fife: 'Fife',
+  Highland: 'Highland',
+  Inverclyde: 'Inverclyde',
+  Kincardineshire: 'Aberdeenshire',
+  Lanarkshire: 'Glasgow City|North Lanarkshire|South Lanarkshire',
+  Midlothian: 'City of Edinburgh|Midlothian',
+  Moray: 'Moray',
+  'North Ayrshire': 'North Ayrshire',
+  'North Lanarkshire': 'North Lanarkshire',
+  Orkney: 'Orkney Islands',
+  'Perth & Kinross': 'Perth and Kinross',
+  Renfrewshire: 'Renfrewshire',
+  'Scottish Borders': 'Scottish Borders',
+  Shetland: 'Shetland Islands',
+  'South Ayrshire': 'South Ayrshire',
+  'South Lanarkshire': 'South Lanarkshire',
+  Stirlingshire: 'Falkirk|Stirling',
+  'West Dunbartonshire': 'West Dunbartonshire',
+  'West Lothian': 'West Lothian',
+  'Western Isles': 'Na h-Eileanan Siar',
+  'Blaenau Gwent': 'Blaenau Gwent',
+  Bridgend: 'Bridgend',
+  Caerphilly: 'Caerphilly',
+  Cardiff: 'Cardiff',
+  Carmarthenshire: 'Carmarthenshire',
+  Ceredigion: 'Ceredigion',
+  Conwy: 'Conwy',
+  Denbighshire: 'Denbighshire',
+  Flintshire: 'Flintshire',
+  Gwynedd: 'Gwynedd',
+  'Isle of Anglesey': 'Isle of Anglesey',
+  'Merthyr Tydfil': 'Merthyr Tydfil',
+  Monmouthshire: 'Monmouthshire',
+  'Neath Port Talbot': 'Neath Port Talbot',
+  Newport: 'Newport',
+  Pembrokeshire: 'Pembrokeshire',
+  Powys: 'Powys',
+  'Rhondda Cynon Taff': 'Rhondda Cynon Taf',
+  Swansea: 'Swansea',
+  Torfaen: 'Torfaen',
+  'Vale of Glamorgan': 'Vale of Glamorgan',
+  Wrexham: 'Wrexham',
+  Antrim: 'Antrim and Newtownabbey|Belfast|Causeway Coast and Glens|Lisburn and Castlereagh|Mid and East Antrim',
+  Armagh: 'Armagh City, Banbridge and Craigavon|Mid Ulster|Newry, Mourne and Down',
+  'County Down': 'Ards and North Down|Belfast|Lisburn and Castlereagh|Newry, Mourne and Down',
+  Fermanagh: 'Fermanagh and Omagh',
+  Londonderry: 'Causeway Coast and Glens|Derry City and Strabane|Mid Ulster',
+  Tyrone: 'Derry City and Strabane|Fermanagh and Omagh|Mid Ulster',
+};
+
+const COUNTY_TARGETS_BY_AREA = Object.entries(COUNTY_AREA_GROUPS).reduce<Record<string, string[]>>(
+  (targetsByArea, [target, areaNames]) => {
+    for (const areaName of areaNames.split('|')) {
+      (targetsByArea[areaName] ??= []).push(target);
+    }
+    return targetsByArea;
+  },
+  {},
+);
+
 function countyProjection(counties: CountyFeature[], width: number, height: number) {
   const positions = counties.flatMap(({ geometry }) => (
     geometry.type === 'Polygon'
@@ -179,8 +303,12 @@ function countyProjection(counties: CountyFeature[], width: number, height: numb
 
 function CountyQuiz() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const groupRef = useRef<SVGGElement>(null);
+  const behaviorRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const [counties, setCounties] = useState<CountyFeature[]>([]);
+  const [countyTargets, setCountyTargets] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [target, setTarget] = useState('');
@@ -202,8 +330,16 @@ function CountyQuiz() {
           .filter((feature): feature is CountyFeature => Boolean(feature.properties?.shapeName))
           .map(correctCountyWinding);
         if (!features.length) throw new Error('UK county boundary data is empty');
-        setCounties(features);
-        setTarget(features[Math.floor(Math.random() * features.length)].properties.shapeName);
+        const areaNames = new Set(features.map((feature) => feature.properties.shapeName));
+        const missingTargets = Object.entries(COUNTY_AREA_GROUPS)
+          .filter(([, areas]) => !areas.split('|').some((area) => areaNames.has(area)))
+          .map(([name]) => name);
+        if (missingTargets.length) throw new Error(`UK county boundaries are missing groups: ${missingTargets.join(', ')}`);
+        const targets = Object.keys(COUNTY_AREA_GROUPS);
+        const playableFeatures = features.filter((feature) => COUNTY_TARGETS_BY_AREA[feature.properties.shapeName]);
+        setCounties(playableFeatures);
+        setCountyTargets(targets);
+        setTarget(targets[Math.floor(Math.random() * targets.length)]);
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -225,6 +361,22 @@ function CountyQuiz() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const svg = svgRef.current;
+    const group = groupRef.current;
+    if (!svg || !group) return;
+    const selection = select(svg);
+    const behavior = zoom<SVGSVGElement, unknown>()
+      .scaleExtent([1, 12])
+      .on('zoom', (event) => select(group).attr('transform', event.transform.toString()));
+    behaviorRef.current = behavior;
+    selection.call(behavior);
+    return () => {
+      selection.on('.zoom', null);
+      behaviorRef.current = null;
+    };
+  }, []);
+
   const path = useMemo(() => {
     if (!size.width || !size.height || !counties.length) return null;
     const projection = countyProjection(counties, size.width, size.height);
@@ -237,14 +389,26 @@ function CountyQuiz() {
     setPicked(answerName);
     setHoveredName('');
     setTotal((value) => value + 1);
-    if (answerName === target) setScore((value) => value + 1);
+    if (COUNTY_TARGETS_BY_AREA[answerName]?.includes(target)) setScore((value) => value + 1);
     timer.current = window.setTimeout(() => {
       setTarget((currentTarget) => {
-        const options = counties.filter((feature) => feature.properties.shapeName !== currentTarget);
-        return options[Math.floor(Math.random() * options.length)]?.properties.shapeName ?? currentTarget;
+        const options = countyTargets.filter((name) => name !== currentTarget);
+        return options[Math.floor(Math.random() * options.length)] ?? currentTarget;
       });
       setPicked('');
     }, 750);
+  }
+
+  function zoomBy(factor: number) {
+    const svg = svgRef.current;
+    const behavior = behaviorRef.current;
+    if (svg && behavior) select(svg).call(behavior.scaleBy, factor);
+  }
+
+  function resetZoom() {
+    const svg = svgRef.current;
+    const behavior = behaviorRef.current;
+    if (svg && behavior) select(svg).call(behavior.transform, zoomIdentity);
   }
 
   function resetScore() {
@@ -252,7 +416,7 @@ function CountyQuiz() {
     setScore(0);
     setTotal(0);
     setPicked('');
-    setTarget(counties[Math.floor(Math.random() * counties.length)]?.properties.shapeName ?? '');
+    setTarget(countyTargets[Math.floor(Math.random() * countyTargets.length)] ?? '');
   }
 
   const accuracy = total ? Math.round((score / total) * 100) : 0;
@@ -264,16 +428,20 @@ function CountyQuiz() {
         <button className="icon-button reset-button" onClick={resetScore} title="Reset county score" aria-label="Reset county score"><RotateCcw size={15} /></button>
       </div>
       <div className="county-question" aria-live="polite">
-        <span className="map-kicker">FIND THIS COUNTY OR LOCAL AREA</span>
+        <span className="map-kicker">FIND THIS COUNTY</span>
         <h2>{loading ? 'Loading county boundaries…' : loadError ? 'County map unavailable' : target || 'Preparing the map'}</h2>
         <span className="county-score">{score} / {total} correct · {accuracy}% accuracy</span>
       </div>
       <div className="map-canvas county-map-canvas" ref={containerRef}>
-        <svg className="world-map" aria-label="Interactive map of United Kingdom counties and local areas">
-          {path && counties.map((county, index) => {
+        <svg ref={svgRef} className="world-map" aria-label="Interactive map of UK counties">
+          <g ref={groupRef}>
+            {path && counties.map((county, index) => {
             const name = county.properties.shapeName;
+            const targetNames = COUNTY_TARGETS_BY_AREA[name] ?? [];
+            if (!targetNames.length) return null;
             const isPicked = name === picked;
-            const status = isPicked ? (picked === target ? 'correct' : 'wrong') : picked && name === target ? 'answer' : '';
+            const isAnswer = targetNames.includes(target);
+            const status = isPicked ? (isAnswer ? 'correct' : 'wrong') : picked && isAnswer ? 'answer' : '';
             return (
               <path
                 key={county.properties.shapeID ?? `${name}-${index}`}
@@ -281,11 +449,11 @@ function CountyQuiz() {
                 className={`country-shape county-shape${status ? ` ${status}` : ''}${picked ? ' locked' : ''}`}
                 role="button"
                 tabIndex={picked ? -1 : 0}
-                aria-label={name}
+                aria-label={targetNames.join(' / ')}
                 aria-disabled={Boolean(picked)}
-                onMouseEnter={() => { if (!picked) setHoveredName(name); }}
+                onMouseEnter={() => { if (!picked) setHoveredName(targetNames.join(' / ')); }}
                 onMouseLeave={() => setHoveredName('')}
-                onFocus={() => { if (!picked) setHoveredName(name); }}
+                onFocus={() => { if (!picked) setHoveredName(targetNames.join(' / ')); }}
                 onBlur={() => setHoveredName('')}
                 onClick={() => answer(county)}
                 onKeyDown={(event) => {
@@ -296,11 +464,18 @@ function CountyQuiz() {
                 }}
               />
             );
-          })}
+            })}
+          </g>
         </svg>
         {hoveredName && !picked && <div className="country-hover-label" role="status">{hoveredName}</div>}
         {(loading || loadError) && <div className="map-message" role={loadError ? 'alert' : 'status'}>{loadError ? 'Could not load UK county boundaries. Please try again later.' : 'Loading county boundaries…'}</div>}
-        <div className="map-stamp">ATLAS<br /><span>UK LOCAL AREAS</span></div>
+        <div className="map-tools county-map-tools" aria-label="County map controls">
+          <button className="icon-button" onClick={() => zoomBy(1.5)} aria-label="Zoom in to counties" title="Zoom in"><ZoomIn size={17} /></button>
+          <button className="icon-button" onClick={() => zoomBy(1 / 1.5)} aria-label="Zoom out from counties" title="Zoom out"><ZoomOut size={17} /></button>
+          <span className="tool-divider" />
+          <button className="icon-button" onClick={resetZoom} aria-label="Reset county map view" title="Reset map view"><Crosshair size={16} /></button>
+        </div>
+        <div className="map-stamp">ATLAS<br /><span>UK COUNTIES</span></div>
       </div>
       <div className="map-caption"><span><i className="legend-dot" />SELECT A COUNTY ON THE MAP</span><span>BOUNDARIES: GEOBOUNDARIES / OGL 3.0</span></div>
     </div>
