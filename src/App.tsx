@@ -1088,7 +1088,7 @@ function RoyaltyQuiz() {
     setFinished(false);
   }
 
-  const questionNumber = Math.min(questionIndex + (picked ? 1 : 0), questions.length);
+  const questionNumber = Math.min(questionIndex + 1, questions.length);
 
   return (
     <div className="planetary-quiz royalty-quiz">
