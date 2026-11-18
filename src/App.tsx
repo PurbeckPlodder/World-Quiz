@@ -5,6 +5,7 @@ import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom';
 import { Crosshair, Globe2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import { createRiversRound, createSolarSystemRound, riverQuestionCount, solarSystemQuestionCount, type TopicQuizQuestion } from './topicQuizzes';
+import { createRoyaltyRound, royaltyQuestionCount } from './royaltyQuiz';
 
 type CountryProperties = {
   ADMIN: string;
@@ -31,9 +32,10 @@ type CountyProperties = { shapeName: string; shapeID?: string; region?: CountyRe
 type CountyFeature = Feature<Geometry, CountyProperties>;
 type CountryMetadata = { cca2: string; cca3: string; capital?: string[] };
 type QuestionMode = 'name' | 'flag' | 'capital' | 'outline';
-type QuizMode = QuestionMode | 'twenty' | 'matchup' | 'counties' | 'whereami' | 'planets' | 'rivers';
+type QuizMode = QuestionMode | 'twenty' | 'matchup' | 'counties' | 'whereami' | 'planets' | 'rivers' | 'royalty';
 type SolarSystemOrbit = { name: string; rx: number; ry: number; angle: number; radius: number; moons: number; rings?: boolean };
 const twentyQuestionDurationSeconds = 5 * 60;
+const royaltyQuestionDurationSeconds = 5 * 60;
 const matchupColumns = ['country', 'capital', 'flag', 'outline', 'population'] as const;
 type MatchupColumn = typeof matchupColumns[number];
 type MatchupTile = { id: string; country: Country; capital: string; flagCode: string; population: number };
@@ -127,6 +129,11 @@ function outlineChoices(features: Country[], target: string) {
   }
 
   return shuffle([answer, ...choices.slice(0, 7)]);
+}
+
+function buildOutlineRound(features: Country[]) {
+  const uniqueCountries = [...new Map(features.map((country) => [country.properties.ADMIN, country])).values()];
+  return shuffle(uniqueCountries);
 }
 
 function metadataFor(country: Country, metadata: Map<string, CountryMetadata>) {
@@ -1013,6 +1020,130 @@ function TopicQuiz({ topic }: { topic: 'solar-system' | 'rivers' }) {
   );
 }
 
+function RoyaltyFamilyDiagram() {
+  return (
+    <div className="solar-system-diagram royalty-family-diagram">
+      <svg viewBox="0 0 900 440" role="img" aria-label="Unlabelled family-tree diagram showing generations of a royal family">
+        <path className="royalty-family-line" d="M450 102v62M220 164h460M220 164v67m230-67v67m230-67v67M105 298h690M105 298v61m230-61v61m230-61v61m230-61v61" />
+        <rect className="royalty-family-node royalty-family-root" x="414" y="52" width="72" height="50" rx="4" />
+        <rect className="royalty-family-node" x="184" y="231" width="72" height="50" rx="4" />
+        <rect className="royalty-family-node" x="414" y="231" width="72" height="50" rx="4" />
+        <rect className="royalty-family-node" x="644" y="231" width="72" height="50" rx="4" />
+        <rect className="royalty-family-node royalty-family-descendant" x="69" y="359" width="72" height="50" rx="4" />
+        <rect className="royalty-family-node royalty-family-descendant" x="299" y="359" width="72" height="50" rx="4" />
+        <rect className="royalty-family-node royalty-family-descendant" x="529" y="359" width="72" height="50" rx="4" />
+        <rect className="royalty-family-node royalty-family-descendant" x="759" y="359" width="72" height="50" rx="4" />
+        <circle className="royalty-family-crown" cx="450" cy="77" r="8" />
+        <circle className="royalty-family-crown" cx="220" cy="256" r="6" />
+        <circle className="royalty-family-crown" cx="450" cy="256" r="6" />
+        <circle className="royalty-family-crown" cx="680" cy="256" r="6" />
+      </svg>
+      <span className="solar-diagram-note">FAMILY · SUCCESSION · REIGNS</span>
+    </div>
+  );
+}
+
+function RoyaltyQuiz() {
+  const [questions, setQuestions] = useState(() => createRoyaltyRound());
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [picked, setPicked] = useState('');
+  const [score, setScore] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(royaltyQuestionDurationSeconds);
+  const [finished, setFinished] = useState(false);
+  const question = questions[questionIndex];
+
+  useEffect(() => {
+    if (finished) return;
+    const interval = window.setInterval(() => {
+      setTimeRemaining((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [finished]);
+
+  useEffect(() => {
+    if (timeRemaining === 0) setFinished(true);
+  }, [timeRemaining]);
+
+  function answer(option: string) {
+    if (finished || picked || !question) return;
+    setPicked(option);
+    if (option === question.answer) setScore((value) => value + 1);
+  }
+
+  function advance() {
+    if (questionIndex === questions.length - 1) {
+      setFinished(true);
+      return;
+    }
+    setQuestionIndex((index) => index + 1);
+    setPicked('');
+  }
+
+  function restart() {
+    setQuestions(createRoyaltyRound());
+    setQuestionIndex(0);
+    setPicked('');
+    setScore(0);
+    setTimeRemaining(royaltyQuestionDurationSeconds);
+    setFinished(false);
+  }
+
+  const questionNumber = Math.min(questionIndex + (picked ? 1 : 0), questions.length);
+
+  return (
+    <div className="planetary-quiz royalty-quiz">
+      <div className="planetary-heading">
+        <div>
+          <span className="map-kicker">{royaltyQuestionCount} QUESTIONS IN THE BANK</span>
+          <span className="map-title">Royalty</span>
+        </div>
+        <div className={`royalty-timer${timeRemaining <= 10 ? ' urgent' : ''}`} role="timer" aria-label={`${formatElapsedTime(timeRemaining)} remaining`}>
+          {formatElapsedTime(timeRemaining)}
+        </div>
+      </div>
+      <RoyaltyFamilyDiagram />
+      <div className="planetary-question" aria-live="polite">
+        {finished ? (
+          <div className="planetary-complete">
+            <span className="map-kicker">{timeRemaining === 0 && questionIndex < questions.length - 1 ? "TIME'S UP" : 'ROUND COMPLETE'}</span>
+            <h2>You scored {score} out of {questions.length}</h2>
+            <p>Start another timed round with 20 fresh royal-history questions.</p>
+            <button className="matchup-start-button" onClick={restart}>Play again</button>
+          </div>
+        ) : (
+          <>
+            <div className="planetary-progress">
+              <span className="map-kicker">20-QUESTION ROUND · QUESTION {questionNumber} OF {questions.length}</span>
+              <div className="planetary-progress-track"><i style={{ width: `${(questionNumber / questions.length) * 100}%` }} /></div>
+              <h2>{question.question}</h2>
+            </div>
+            <div className="planetary-answer-grid" role="group" aria-label="Choose an answer">
+              {question.options.map((option) => (
+                <button
+                  className={`planetary-answer${picked ? option === question.answer ? ' correct' : option === picked ? ' wrong' : '' : ''}`}
+                  type="button"
+                  key={option}
+                  onClick={() => answer(option)}
+                  disabled={Boolean(picked)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+            {picked && (
+              <div className="planetary-response">
+                <p className="planetary-feedback" role="status">{picked === question.answer ? 'Correct!' : `Not quite — the answer is ${question.answer}.`}</p>
+                <p className="planetary-fact"><strong>Royal fact:</strong> {question.fact}</p>
+                <button className="matchup-start-button" onClick={advance}>{questionIndex === questions.length - 1 ? 'See results' : 'Next question'}</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MatchupTileButton({
   column,
   tile,
@@ -1181,6 +1312,11 @@ function App() {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(twentyQuestionDurationSeconds);
   const [challengeFinished, setChallengeFinished] = useState(false);
+  const [outlineTargets, setOutlineTargets] = useState<Country[]>([]);
+  const [outlineIndex, setOutlineIndex] = useState(0);
+  const [outlineElapsedSeconds, setOutlineElapsedSeconds] = useState(0);
+  const [outlineStarted, setOutlineStarted] = useState(false);
+  const [outlineFinished, setOutlineFinished] = useState(false);
   const [matchupTiles, setMatchupTiles] = useState<MatchupTile[]>([]);
   const [matchupBoard, setMatchupBoard] = useState<MatchupBoard>(() => createMatchupBoard([]));
   const [matchupStarted, setMatchupStarted] = useState(false);
@@ -1196,7 +1332,7 @@ function App() {
   const countdown = useRef<number | undefined>(undefined);
 
   const currentQuestion = quizMode === 'twenty' ? sessionQuestions[questionIndex] : undefined;
-  const questionMode: QuestionMode = currentQuestion?.mode ?? (quizMode === 'twenty' || quizMode === 'matchup' || quizMode === 'counties' || quizMode === 'whereami' || quizMode === 'planets' || quizMode === 'rivers' ? 'name' : quizMode);
+  const questionMode: QuestionMode = currentQuestion?.mode ?? (quizMode === 'twenty' || quizMode === 'matchup' || quizMode === 'counties' || quizMode === 'whereami' || quizMode === 'planets' || quizMode === 'rivers' || quizMode === 'royalty' ? 'name' : quizMode);
   const activeContinent = currentQuestion?.continent ?? continent;
   const activeCountries = useMemo(
     () => activeContinent === 'World' ? countries : countries.filter((country) => country.properties.CONTINENT === activeContinent),
@@ -1253,6 +1389,19 @@ function App() {
     window.clearTimeout(timer.current);
     setLocked(false);
     setPicked('');
+    if (quizMode === 'outline') {
+      const targets = buildOutlineRound(quizCountries);
+      setOutlineTargets(targets);
+      setOutlineIndex(0);
+      setOutlineElapsedSeconds(0);
+      setOutlineFinished(targets.length === 0);
+      setOutlineStarted(targets.length > 0);
+      setScore(0);
+      setTotal(0);
+      setTarget(targets[0]?.properties.ADMIN ?? '');
+      return () => window.clearTimeout(timer.current);
+    }
+    setOutlineStarted(false);
     setTarget(quizCountries.length ? randomCountry(quizCountries)?.properties.ADMIN ?? '' : '');
     return () => window.clearTimeout(timer.current);
   }, [quizCountries, quizMode]);
@@ -1268,6 +1417,12 @@ function App() {
     countdown.current = window.setInterval(() => setMatchupElapsedSeconds((seconds) => seconds + 1), 1000);
     return () => window.clearInterval(countdown.current);
   }, [quizMode, matchupStarted, matchupFinished]);
+
+  useEffect(() => {
+    if (quizMode !== 'outline' || !outlineStarted || outlineFinished) return;
+    countdown.current = window.setInterval(() => setOutlineElapsedSeconds((seconds) => seconds + 1), 1000);
+    return () => window.clearInterval(countdown.current);
+  }, [quizMode, outlineStarted, outlineFinished]);
 
   useEffect(() => {
     if (quizMode !== 'twenty' || timeRemaining > 0 || challengeFinished) return;
@@ -1294,6 +1449,16 @@ function App() {
         }
         setQuestionIndex(nextIndex);
         setTarget(sessionQuestions[nextIndex].target);
+      } else if (quizMode === 'outline') {
+        const nextIndex = outlineIndex + 1;
+        if (nextIndex === outlineTargets.length) {
+          setOutlineFinished(true);
+          setOutlineStarted(false);
+          setTarget('');
+          return;
+        }
+        setOutlineIndex(nextIndex);
+        setTarget(outlineTargets[nextIndex].properties.ADMIN);
       } else {
         setTarget(randomCountry(quizCountries, target)?.properties.ADMIN ?? '');
       }
@@ -1312,6 +1477,21 @@ function App() {
     setChallengeFinished(false);
     setQuizMode('twenty');
     setTarget(questions[0].target);
+    setPicked('');
+    setLocked(false);
+    setScore(0);
+    setTotal(0);
+  }
+
+  function restartOutlineRound() {
+    window.clearTimeout(timer.current);
+    const targets = buildOutlineRound(quizCountries);
+    setOutlineTargets(targets);
+    setOutlineIndex(0);
+    setOutlineElapsedSeconds(0);
+    setOutlineFinished(targets.length === 0);
+    setOutlineStarted(targets.length > 0);
+    setTarget(targets[0]?.properties.ADMIN ?? '');
     setPicked('');
     setLocked(false);
     setScore(0);
@@ -1380,6 +1560,8 @@ function App() {
     setChallengeFinished(false);
     setMatchupStarted(false);
     setMatchupFinished(false);
+    setOutlineStarted(false);
+    setOutlineFinished(false);
     setSessionQuestions([]);
     setQuestionIndex(0);
     setTimeRemaining(twentyQuestionDurationSeconds);
@@ -1391,6 +1573,10 @@ function App() {
   function resetScore() {
     if (quizMode === 'twenty') {
       startTwentyQuestions();
+      return;
+    }
+    if (quizMode === 'outline') {
+      restartOutlineRound();
       return;
     }
     setScore(0);
@@ -1421,24 +1607,25 @@ function App() {
       </header>
 
       <div className="workspace">
-        <aside className={`quiz-panel${questionMode === 'outline' ? ' outline-quiz-panel' : ''}${quizMode === 'twenty' ? ' challenge-quiz-panel' : ''}${quizMode === 'matchup' ? ' matchup-quiz-panel' : ''}${quizMode === 'counties' ? ' counties-quiz-panel' : ''}${quizMode === 'whereami' ? ' whereami-quiz-panel' : ''}${quizMode === 'planets' || quizMode === 'rivers' ? ' planetary-quiz-panel' : ''}`}>
-          <div className="eyebrow"><span>01</span> &nbsp;{quizMode === 'planets' || quizMode === 'rivers' ? 'TOPIC QUIZ' : 'COUNTRY STUDY'}</div>
+        <aside className={`quiz-panel${questionMode === 'outline' ? ' outline-quiz-panel' : ''}${quizMode === 'twenty' ? ' challenge-quiz-panel' : ''}${quizMode === 'matchup' ? ' matchup-quiz-panel' : ''}${quizMode === 'counties' ? ' counties-quiz-panel' : ''}${quizMode === 'whereami' ? ' whereami-quiz-panel' : ''}${quizMode === 'planets' || quizMode === 'rivers' ? ' planetary-quiz-panel' : ''}${quizMode === 'royalty' ? ' royalty-quiz-panel' : ''}`}>
+          <div className="eyebrow"><span>01</span> &nbsp;{quizMode === 'planets' || quizMode === 'rivers' || quizMode === 'royalty' ? 'TOPIC QUIZ' : 'COUNTRY STUDY'}</div>
           <div className="question-block" aria-live="polite">
             <div className="question-label">
-              {quizMode === 'counties' ? 'COUNTY QUIZ' : quizMode === 'whereami' ? 'WHERE AM I?' : quizMode === 'planets' ? 'THE SOLAR SYSTEM' : quizMode === 'rivers' ? 'WORLD RIVERS' : quizMode === 'matchup' ? 'MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
+              {quizMode === 'counties' ? 'COUNTY QUIZ' : quizMode === 'whereami' ? 'WHERE AM I?' : quizMode === 'planets' ? 'THE SOLAR SYSTEM' : quizMode === 'rivers' ? 'WORLD RIVERS' : quizMode === 'royalty' ? 'ROYALTY' : quizMode === 'matchup' ? 'MATCHUP' : quizMode === 'twenty' ? <><span>20 QUESTION CHALLENGE</span><span role="timer" className={`challenge-clock${timeRemaining <= 10 ? ' urgent' : ''}`} aria-label={`${timeRemaining} seconds remaining`}>{`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}</span></> : 'YOUR NEXT DESTINATION'}
             </div>
             {quizMode === 'twenty' && <div className="challenge-progress">QUESTION {Math.min(questionIndex + 1, 20)} / 20 <span>{activeContinent.toUpperCase()}</span></div>}
-            <h1>{quizMode === 'counties' ? 'Explore the counties' : quizMode === 'whereami' ? 'Trace the distances' : quizMode === 'planets' || quizMode === 'rivers' ? '25 questions' : quizMode === 'matchup' ? matchupFinished ? 'All matched!' : 'Match the clues' : loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
+            {quizMode === 'outline' && <div className="challenge-progress"><span>COUNTRY {Math.min(outlineIndex + 1, outlineTargets.length)} / {outlineTargets.length}</span><span role="timer" aria-label={`${formatElapsedTime(outlineElapsedSeconds)} elapsed`}>{formatElapsedTime(outlineElapsedSeconds)}</span></div>}
+            <h1>{quizMode === 'counties' ? 'Explore the counties' : quizMode === 'whereami' ? 'Trace the distances' : quizMode === 'planets' || quizMode === 'rivers' ? '25 questions' : quizMode === 'royalty' ? '20 questions' : quizMode === 'outline' && outlineFinished ? 'Region complete' : quizMode === 'matchup' ? matchupFinished ? 'All matched!' : 'Match the clues' : loading ? 'Preparing the atlas' : loadError ? 'Map unavailable' : quizMode === 'twenty' && challengeFinished ? timeRemaining === 0 ? "Time's up" : 'Challenge complete' : target ? questionMode === 'name' ? <>Find <em>{target}</em></> : questionMode === 'capital' ? <>Find the country with capital <em>{targetMetadata?.capital?.[0]}</em></> : questionMode === 'outline' ? 'Name this outline' : 'Identify this flag' : 'No countries found'}</h1>
             {questionMode === 'flag' && targetMetadata?.cca2 && <img className="flag-clue" src={`https://flagcdn.com/w320/${targetMetadata.cca2.toLowerCase()}.png`} alt="Flag clue" />}
-            <p className="instruction">{quizMode === 'counties' ? 'Select the county named on the map.' : quizMode === 'whereami' ? 'Match a UK place to its geodesic distances from three others.' : quizMode === 'planets' ? 'Explore the planets, moons, and their remarkable features.' : quizMode === 'rivers' ? 'Explore great rivers, their routes, cities, and destinations.' : quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all five clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues are unavailable right now.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : ''}</p>
+            <p className="instruction">{quizMode === 'counties' ? 'Select the county named on the map.' : quizMode === 'whereami' ? 'Match a UK place to its geodesic distances from three others.' : quizMode === 'planets' ? 'Explore the planets, moons, and their remarkable features.' : quizMode === 'rivers' ? 'Explore great rivers, their routes, cities, and destinations.' : quizMode === 'royalty' ? 'Test your knowledge of British monarchs, family, and reigns in a five-minute round.' : quizMode === 'outline' && outlineFinished ? `You identified every country in ${activeContinent}. Score: ${score} / ${total}. Elapsed time: ${formatElapsedTime(outlineElapsedSeconds)}.` : quizMode === 'matchup' ? matchupFinished ? `Completed in ${formatElapsedTime(matchupElapsedSeconds)}.` : 'Line up all five clues for each of the ten countries.' : quizMode === 'twenty' && challengeFinished ? `You scored ${score} of 20.` : loading ? 'Loading country borders…' : loadError ? 'The map data could not be reached.' : metadataError && (questionMode === 'flag' || questionMode === 'capital') ? 'Flag and capital clues are unavailable right now.' : picked ? (isCorrect ? 'Exactly right. Nice work.' : `That was ${picked}. The answer is ${target}.`) : !target && !metadataLoading && questionMode !== 'name' ? `No ${questionMode} clues are available for this region.` : quizMode === 'outline' ? 'Identify every country in the selected region. Each outline appears once.' : ''}</p>
           </div>
 
           <section className="quiz-settings" aria-label="Quiz options">
             <div className="section-heading"><span>CLUE TYPE</span></div>
             <div className="mode-options" role="group" aria-label="Choose a quiz clue">
-              {(['name', 'flag', 'capital', 'outline', 'twenty', 'matchup', 'counties', 'whereami', 'planets', 'rivers'] as const).map((mode) => (
+              {(['name', 'flag', 'capital', 'outline', 'twenty', 'matchup', 'counties', 'whereami', 'planets', 'rivers', 'royalty'] as const).map((mode) => (
                 <button key={mode} className={`mode-option${quizMode === mode ? ' selected' : ''}`} onClick={() => changeMode(mode)} aria-pressed={quizMode === mode} disabled={((mode === 'flag' || mode === 'capital') && (metadataLoading || metadataError)) || ((mode === 'twenty' || mode === 'matchup') && (loading || metadataLoading || metadataError))}>
-                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : mode === 'twenty' ? '20 Questions' : mode === 'matchup' ? 'Matchup' : mode === 'counties' ? 'UK Counties' : mode === 'whereami' ? 'Where am I?' : mode === 'planets' ? 'The Solar System' : 'Rivers of the World'}
+                  {mode === 'name' ? 'Name' : mode === 'flag' ? 'Flag' : mode === 'capital' ? 'Capital' : mode === 'outline' ? 'Outline' : mode === 'twenty' ? '20 Questions' : mode === 'matchup' ? 'Matchup' : mode === 'counties' ? 'UK Counties' : mode === 'whereami' ? 'Where am I?' : mode === 'planets' ? 'The Solar System' : mode === 'rivers' ? 'Rivers of the World' : 'Royalty'}
                 </button>
               ))}
             </div>
@@ -1462,13 +1649,20 @@ function App() {
                 </div>
               </section>
             )}
-            {quizMode !== 'matchup' && quizMode !== 'planets' && quizMode !== 'rivers' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />{quizMode === 'counties' ? 'Show county names on hover' : quizMode === 'whereami' ? 'Show place names on hover' : 'Show country name on hover'}</label>}
+            {quizMode !== 'matchup' && quizMode !== 'planets' && quizMode !== 'rivers' && quizMode !== 'royalty' && <label className="hover-toggle"><input type="checkbox" checked={showHoverName} onChange={(event) => setShowHoverName(event.target.checked)} />{quizMode === 'counties' ? 'Show county names on hover' : quizMode === 'whereami' ? 'Show place names on hover' : 'Show country name on hover'}</label>}
             {quizMode === 'whereami' && <label className="hover-toggle"><input type="checkbox" checked={highlightDistancePlaces} onChange={(event) => setHighlightDistancePlaces(event.target.checked)} />Highlight clue cities and distances</label>}
             {metadataError && <p className="metadata-note">Flag and capital clues are unavailable right now.</p>}
             {matchupError && <p className="metadata-note" role="alert">{matchupError}</p>}
           </section>
 
-          {questionMode === 'outline' && target && (
+          {questionMode === 'outline' && (outlineFinished ? (
+            <section className="outline-choices outline-round-result" aria-label="Outline quiz results">
+              <span className="map-kicker">REGION COMPLETE</span>
+              <strong>{score} / {total} correct</strong>
+              <span>Elapsed time · {formatElapsedTime(outlineElapsedSeconds)}</span>
+              <button className="matchup-start-button" onClick={restartOutlineRound}>Play region again</button>
+            </section>
+          ) : target && (
             <section className="outline-choices" aria-label="Choose the outlined country">
               <div className="section-heading"><span>WHICH COUNTRY?</span><span className="region-count">{choices.length} {choices.length === 1 ? 'OPTION' : 'OPTIONS'}</span></div>
               <div className="outline-choice-grid">
@@ -1479,9 +1673,9 @@ function App() {
                 })}
               </div>
             </section>
-          )}
+          ))}
 
-          {quizMode !== 'matchup' && quizMode !== 'counties' && quizMode !== 'whereami' && quizMode !== 'planets' && quizMode !== 'rivers' && <section className="region-section" aria-labelledby="region-title">
+          {quizMode !== 'matchup' && quizMode !== 'counties' && quizMode !== 'whereami' && quizMode !== 'planets' && quizMode !== 'rivers' && quizMode !== 'royalty' && <section className="region-section" aria-labelledby="region-title">
             <div className="section-heading"><span id="region-title">{quizMode === 'twenty' ? 'REGION · AUTO' : 'REGION'}</span><span className="region-count">{String(continents.indexOf(activeContinent) + 1).padStart(2, '0')} / 08</span></div>
             <div className="region-grid" role="group" aria-label="Choose a region">
               {continents.map((region) => (
@@ -1492,7 +1686,7 @@ function App() {
             </div>
           </section>}
 
-          {quizMode !== 'counties' && quizMode !== 'whereami' && quizMode !== 'planets' && quizMode !== 'rivers' && <section className="score-section" aria-label="Quiz score">
+          {quizMode !== 'counties' && quizMode !== 'whereami' && quizMode !== 'planets' && quizMode !== 'rivers' && quizMode !== 'royalty' && <section className="score-section" aria-label="Quiz score">
             <div className="section-heading"><span>{quizMode === 'matchup' ? 'MATCHED ROWS' : 'SESSION SCORE'}</span>{quizMode !== 'matchup' && <button className="icon-button reset-button" onClick={resetScore} title="Reset score" aria-label="Reset score"><RotateCcw size={15} /></button>}</div>
             <div className="score-row"><strong>{quizMode === 'matchup' ? correctMatchupRows : score}<span> / {quizMode === 'matchup' ? 10 : total}</span></strong>{quizMode === 'matchup' ? <span className="accuracy">ROWS</span> : <span className="accuracy">{accuracy}%<small> ACCURACY</small></span>}</div>
             <div className="score-track" aria-hidden="true"><span style={{ width: `${quizMode === 'matchup' ? correctMatchupRows * 10 : accuracy}%` }} /></div>
@@ -1501,9 +1695,11 @@ function App() {
           <div className="panel-footer"><Crosshair size={15} /><span>Every answer is a new bearing.</span></div>
         </aside>
 
-        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}${quizMode === 'counties' ? ' county-map-section' : ''}${quizMode === 'whereami' ? ' whereami-section' : ''}${quizMode === 'planets' || quizMode === 'rivers' ? ' planetary-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Matchup game' : quizMode === 'counties' ? 'County quiz' : quizMode === 'whereami' ? 'Where am I UK distance quiz' : quizMode === 'planets' ? 'The Solar System quiz' : quizMode === 'rivers' ? 'Rivers of the World quiz' : 'Interactive world map'}>
+        <section className={`map-section${quizMode === 'matchup' ? ' matchup-section' : ''}${quizMode === 'counties' ? ' county-map-section' : ''}${quizMode === 'whereami' ? ' whereami-section' : ''}${quizMode === 'planets' || quizMode === 'rivers' ? ' planetary-section' : ''}${quizMode === 'royalty' ? ' royalty-section' : ''}`} aria-label={quizMode === 'matchup' ? 'Matchup game' : quizMode === 'counties' ? 'County quiz' : quizMode === 'whereami' ? 'Where am I UK distance quiz' : quizMode === 'planets' ? 'The Solar System quiz' : quizMode === 'rivers' ? 'Rivers of the World quiz' : quizMode === 'royalty' ? 'Royalty timed quiz' : 'Interactive world map'}>
           {quizMode === 'counties' ? (
             <CountyQuiz selectedRegions={selectedCountyRegions} showHoverName={showHoverName} />
+          ) : quizMode === 'royalty' ? (
+            <RoyaltyQuiz />
           ) : quizMode === 'planets' || quizMode === 'rivers' ? (
             <TopicQuiz key={quizMode} topic={quizMode === 'rivers' ? 'rivers' : 'solar-system'} />
           ) : quizMode === 'whereami' ? (
@@ -1522,9 +1718,15 @@ function App() {
             />
           ) : (
             <>
-              <div className="map-heading"><div><span className="map-kicker">{questionMode === 'outline' ? 'ONE COUNTRY, NO NEIGHBOURS' : 'THE WORLD, ONE COUNTRY AT A TIME'}</span><span className="map-title">{questionMode === 'outline' ? 'Country outline' : activeContinent === 'World' ? 'World map' : activeContinent}</span></div><div className="map-coordinates">{questionMode === 'outline' ? 'IDENTIFY THE SHAPE' : quizMode === 'twenty' ? '5 MINUTE ROUND' : '50° N&nbsp; / &nbsp;20° E'}</div></div>
+              <div className="map-heading"><div><span className="map-kicker">{questionMode === 'outline' ? outlineFinished ? 'ALL COUNTRIES SHOWN ONCE' : 'ONE COUNTRY, NO NEIGHBOURS' : 'THE WORLD, ONE COUNTRY AT A TIME'}</span><span className="map-title">{questionMode === 'outline' ? outlineFinished ? `${activeContinent} complete` : 'Country outline' : activeContinent === 'World' ? 'World map' : activeContinent}</span></div><div className="map-coordinates">{questionMode === 'outline' ? outlineFinished ? `${score} / ${total} · ${formatElapsedTime(outlineElapsedSeconds)}` : `IDENTIFY ${outlineIndex + 1} / ${outlineTargets.length}` : quizMode === 'twenty' ? '5 MINUTE ROUND' : '50° N&nbsp; / &nbsp;20° E'}</div></div>
               {questionMode === 'outline' ? (
-                <CountryOutline country={targetCountry} loading={loading} loadError={loadError} />
+                outlineFinished ? (
+                  <div className="outline-round-summary" role="status">
+                    <span className="map-kicker">ROUND COMPLETE</span>
+                    <strong>{score} <i>/ {total}</i></strong>
+                    <span>Countries identified · {formatElapsedTime(outlineElapsedSeconds)}</span>
+                  </div>
+                ) : <CountryOutline country={targetCountry} loading={loading} loadError={loadError} />
               ) : (
                 <MapView
                   countries={activeCountries}

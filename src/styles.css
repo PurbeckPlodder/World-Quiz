@@ -44,7 +44,7 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .instruction { margin: 17px 0 0; color: #65736b; font-size: 13px; line-height: 1.55; }
 .outline-quiz-panel .question-block { margin: 20px 0 16px; }
 .outline-quiz-panel .quiz-settings { padding: 10px 0 12px; }
-.outline-quiz-panel, .challenge-quiz-panel { overflow-y: auto; }
+.outline-quiz-panel, .challenge-quiz-panel, .royalty-quiz-panel { overflow-y: auto; }
 .challenge-quiz-panel .question-block { margin: 20px 0 16px; }
 .challenge-quiz-panel .quiz-settings { padding: 10px 0 12px; }
 .challenge-clock { color: var(--ink); font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -72,6 +72,11 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .county-region-option input:disabled { cursor: not-allowed; }
 .metadata-note { margin: 8px 0 0; color: #9c4a36; font-size: 11px; line-height: 1.4; }
 .outline-choices { padding: 0 0 14px; }
+.outline-round-result { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; color: #65736b; font-size: 11px; }
+.outline-round-result strong { color: var(--ink); font-family: 'Fraunces', serif; font-size: 24px; font-weight: 500; }
+.outline-round-summary { display: flex; flex: 1; min-height: 240px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #65736b; font-size: 12px; text-align: center; }
+.outline-round-summary strong { color: var(--accent); font-family: 'Fraunces', serif; font-size: clamp(56px, 9vw, 100px); font-weight: 500; line-height: 1; }
+.outline-round-summary strong i { color: #9aa59b; font-size: .55em; font-style: normal; }
 .outline-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
 .outline-choice { min-width: 0; min-height: 34px; padding: 5px 8px; overflow-wrap: anywhere; background: transparent; border: 1px solid var(--line); color: #52615a; text-align: left; font-size: 11px; cursor: pointer; }
 .outline-choice:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); }
@@ -183,12 +188,17 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .planetary-quiz-panel { overflow-y: auto; }
 .planetary-quiz-panel .question-block { margin: 24px 0 18px; }
 .planetary-quiz-panel .quiz-settings { padding: 10px 0 12px; }
+.royalty-quiz-panel .question-block { margin: 24px 0 18px; }
+.royalty-quiz-panel .quiz-settings { padding: 10px 0 12px; }
 .planetary-section { min-height: 0; }
+.royalty-section { min-height: 0; }
 .planetary-quiz { display: flex; flex: 1; flex-direction: column; gap: 12px; min-height: 0; }
 .planetary-heading { display: flex; flex: 0 0 auto; align-items: end; justify-content: space-between; gap: 12px; }
 .planetary-heading > div { display: flex; flex-direction: column; gap: 5px; }
 .planetary-heading .map-title { font-size: 25px; }
 .planetary-score { color: #65736b; font-family: var(--mono); font-size: 10px; white-space: nowrap; }
+.royalty-timer { color: var(--ink); font-family: var(--mono); font-size: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.royalty-timer.urgent { color: var(--accent); }
 .solar-system-diagram { position: relative; flex: 0 0 44%; min-height: 180px; max-height: 310px; overflow: hidden; border: 1px solid #d5dfd9; background: var(--ocean); }
 .solar-system-diagram::before { position: absolute; content: ''; inset: 0; opacity: .46; background-image: linear-gradient(rgba(85, 123, 112, .055) 1px, transparent 1px), linear-gradient(90deg, rgba(85, 123, 112, .055) 1px, transparent 1px); background-size: 36px 36px; pointer-events: none; }
 .solar-system-diagram svg { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -204,6 +214,11 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
 .solar-sun-point { fill: #e3ae58; stroke: #c58a38; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
 .solar-sun-line { fill: none; stroke: #c58a38; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
 .solar-diagram-note { position: absolute; right: 9px; bottom: 7px; color: #63776c; font-family: var(--mono); font-size: 8px; letter-spacing: .06em; }
+.royalty-family-line { fill: none; stroke: #91a99c; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.royalty-family-node { fill: #f5f3e9; stroke: #739283; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.royalty-family-root { fill: #d7e5dc; stroke: #557a66; }
+.royalty-family-descendant { fill: #e8eee8; }
+.royalty-family-crown { fill: #d29d4e; stroke: #fff9e8; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .river-terrain-line { fill: none; stroke: #8e9c90; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .river-course-line { fill: none; stroke: #4f9dbe; stroke-width: 6; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .river-course-line.river-tributary { stroke-width: 3; }
@@ -296,7 +311,7 @@ button:focus-visible, a:focus-visible, .country-shape:focus-visible { outline: 2
   .whereami-feedback, .whereami-question .matchup-start-button { grid-column: 1; grid-row: auto; }
   .whereami-heading { align-items: center; }
   .whereami-section .map-caption { flex-wrap: wrap; }
-  .planetary-section { min-height: 780px; }
+  .planetary-section, .royalty-section { min-height: 780px; }
   .planetary-quiz { min-height: 700px; }
   .solar-system-diagram { flex-basis: 31%; min-height: 180px; }
   .planetary-question { flex: 1 0 auto; }
